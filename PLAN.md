@@ -63,7 +63,7 @@ Content is data-driven: room graphs and puzzle tables are versioned data files c
 
 ## Packaging / distribution
 
-TestFlight-first via the fleet release Action; App Store submission only after gameplay-vertical polish. Listing copy lives in `AppStore/description.txt` and must be re-reviewed against implemented features before release. Icon is generated artwork at `AppStore/icon.png` (hermes-image-gen, fleet brief) wired into the Xcode app-icon asset catalog. Single original-IP product, no IAP → simple paid or free tier decided at release time (default: free, no IAP).
+Bundle identifier: `com.infinityball.delve` in `PRODUCT_BUNDLE_IDENTIFIER`, Info.plist, and all signing/provisioning configuration — the registered `com.infinityball.` prefix is mandatory and never substituted. TestFlight-first via the fleet release Action; App Store submission only after gameplay-vertical polish. Listing copy lives in `AppStore/description.txt` and must be re-reviewed against implemented features before release. Icon is generated artwork at `AppStore/icon.png` (hermes-image-gen, fleet brief) wired into the Xcode app-icon asset catalog. Single original-IP product, no IAP → simple paid or free tier decided at release time (default: free, no IAP).
 
 ## Risks
 
