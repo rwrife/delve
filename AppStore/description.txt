@@ -1,0 +1,29 @@
+Delve — Fixed-Dungeon Puzzle Crawler
+
+One handcrafted tomb. Zero randomness. Everything you learn, you keep.
+
+Delve is an offline, single-player adventure game about a fixed dungeon that never reshuffles. Explore room by room with simple one-thumb controls, read a cryptic quest that points at goals without giving you the route, and figure out which puzzles must be solved first — because the sealed door down the hall only opens if you pulled the right lever three rooms ago.
+
+Delve rewards observation, notes, and deliberate backtracking instead of grinding.
+
+WHAT MAKES IT DIFFERENT
+
+• Fixed, handcrafted dungeon — every room, secret, and puzzle placement is designed, not generated. Your knowledge is the real progress.
+• Order-of-operations puzzles — some goals dead-end the naive route. Experiment, backtrack, retry. Nothing you do can softlock your run.
+• A genuinely vague quest — goals report only what your actions actually proved (unknown / in progress / achieved). No quest markers, no hand-holding.
+• Clue journal — pin your own notes to rooms and track quest theories in a journal that stays entirely yours. Plan your next push at the entrance.
+• Honest run records — your steps, sessions, and discoveries are derived from an append-only ledger of what actually happened.
+
+BUILT FOR REAL LIFE
+
+• 100% offline. No accounts, no sign-up, no ads, no subscriptions, no in-app purchases, no trackers, no data collection. The game does not use the network at all.
+• Instant resume — quit mid-room, come back mid-room. Progress survives app closes and restarts.
+• Your data stays on your phone — export a full JSON backup or CSV journal any time; restore is previewed before anything changes.
+• Designed for one hand — large touch targets, pause anywhere, one-thumb movement.
+• Accessible — Dynamic Type on menus and journal, VoiceOver labels, colorblind-safe state glyphs.
+
+A NOTE ON DUAL SCREENS
+
+Delve is built as a standard iPhone app today. The dungeon view and the clue journal are already separate surfaces, designed so that on a future dual-screen iPhone the journal can live permanently on the second display while you explore. No fold is required to play — it's a design target, not a gate.
+
+Delve is original work: no franchise characters, no borrowed assets, no paid shortcuts. Just a tomb, a quest, and your notebook.

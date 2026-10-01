@@ -1,0 +1,38 @@
+# Xcode
+DerivedData/
+build/
+*.xcarchive
+*.ipa
+*.dSYM
+*.dSYM.zip
+xcuserdata/
+*.xcuserstate
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved.lock
+
+# Local tooling and credentials
+.env
+*.p8
+*.p12
+*.mobileprovision
+*.provisionprofile
+*.cer
+asc_private/
+
+# Python helper-script bytecode
+__pycache__/
+*.pyc
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
+
+# Local databases and exports
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+exports/
