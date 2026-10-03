@@ -23,11 +23,15 @@ struct RuleEngineTests {
     @Test("loader rejects dangling cross-references")
     func loaderRejectsDanglingRefs() {
         #expect(throws: RuleTables.TablesError.danglingReference("door a->ghost")) {
-            _ = try RuleTables.load(contentsOf: Data(#"{"contentVersion":9,"graph":{"schemaVersion":1,"rooms":[{"id":"a","wing":"w"}],"doors":[{"from":"a","to":"ghost","lock":null}],"wings":[{"id":"w"}]},"switchEffects":{},"lockKeys":{},"keySpawns":{},"discoverySpawns":{},"patrolCycles":{}}"#.utf8))
+            _ = try RuleTables.load(contentsOf: Data(#"{"contentVersion":9,"spawnRoom":"a","graph":{"schemaVersion":1,"rooms":[{"id":"a","wing":"w"}],"doors":[{"from":"a","to":"ghost","lock":null}],"wings":[{"id":"w"}]},"switchEffects":{},"lockKeys":{},"keySpawns":{},"discoverySpawns":{},"patrolCycles":{}}"#.utf8))
         }
         // Lock without a key binding is dangling too.
         #expect(throws: RuleTables.TablesError.danglingReference("lock nope")) {
-            _ = try RuleTables.load(contentsOf: Data(#"{"contentVersion":9,"graph":{"schemaVersion":1,"rooms":[{"id":"a","wing":"w"},{"id":"b","wing":"w"}],"doors":[{"from":"a","to":"b","lock":"nope"}],"wings":[{"id":"w"}]},"switchEffects":{},"lockKeys":{},"keySpawns":{},"discoverySpawns":{},"patrolCycles":{}}"#.utf8))
+            _ = try RuleTables.load(contentsOf: Data(#"{"contentVersion":9,"spawnRoom":"a","graph":{"schemaVersion":1,"rooms":[{"id":"a","wing":"w"},{"id":"b","wing":"w"}],"doors":[{"from":"a","to":"b","lock":"nope"}],"wings":[{"id":"w"}]},"switchEffects":{},"lockKeys":{},"keySpawns":{},"discoverySpawns":{},"patrolCycles":{}}"#.utf8))
+        }
+        // A spawn room that isn't a real room is dangling too.
+        #expect(throws: RuleTables.TablesError.danglingReference("spawnRoom nowhere")) {
+            _ = try RuleTables.load(contentsOf: Data(#"{"contentVersion":9,"spawnRoom":"nowhere","graph":{"schemaVersion":1,"rooms":[{"id":"a","wing":"w"}],"doors":[],"wings":[{"id":"w"}]},"switchEffects":{},"lockKeys":{},"keySpawns":{},"discoverySpawns":{},"patrolCycles":{}}"#.utf8))
         }
     }
 
@@ -79,10 +83,13 @@ struct RuleEngineTests {
         #expect(result.world == world)
     }
 
-    @Test("first visit is legal anywhere (run spawn), unknown rooms rejected")
+    @Test("run spawns only at the table spawn room; unknown rooms rejected")
     func spawnAndUnknownRooms() {
-        let start = RuleEngine.step(WorldState(), .visit(room: "brazier-hall"), tables: .current)
-        #expect(start.currentRoom == "brazier-hall")
+        let start = RuleEngine.step(WorldState(), .visit(room: "entrance"), tables: .current)
+        #expect(start.currentRoom == "entrance")
+        // First visit anywhere else is rejected — no spawning past the lock.
+        let wrongSpawn = RuleEngine.stepResult(WorldState(), .visit(room: "sealed-vault"), tables: .current)
+        #expect(!wrongSpawn.accepted)
         let ghost = RuleEngine.stepResult(WorldState(), .visit(room: "ghost-room"), tables: .current)
         #expect(!ghost.accepted)
     }
@@ -257,14 +264,15 @@ struct DeterminismTests {
         #expect(throws: RunLedger.LedgerError.nonMonotonicSequence(expected: 1, found: 2)) {
             _ = try RunLedger(entries: gap)
         }
-        // Decoded ledgers route through the same validation: hand-built
-        // JSON with a sequence gap must throw.
-        let badJSON = """
-        {"contentVersion":1,"entries":[\
-        {"event":{"visit":{"room":"entrance"}},"sequence":0},\
-        {"event":{"visit":{"room":"entrance"}},"sequence":2}]}
-        """
-        #expect(throws: (any Error).self) {
+        // Decoded ledgers route through the same validation: wire JSON
+        // (canonical eventBase64 rows) with a sequence gap must throw.
+        let visitB64 = try EventCodec.canonical(GameEvent.visit(room: "entrance")).base64EncodedString()
+        let visitJSON = "{\"eventBase64\":\"\(visitB64)\","
+        let badJSON =
+            "{\"contentVersion\":1,\"entries\":["
+            + visitJSON + "\"sequence\":0},"
+            + visitJSON + "\"sequence\":2}]}"
+        #expect(throws: RunLedger.LedgerError.nonMonotonicSequence(expected: 1, found: 2)) {
             _ = try JSONDecoder().decode(RunLedger.self, from: Data(badJSON.utf8))
         }
         let ok = [
@@ -274,12 +282,24 @@ struct DeterminismTests {
         #expect(try RunLedger(entries: ok).entries.count == 2)
     }
 
-    @Test("ledger is pinned to its content version")
+    @Test("ledger is pinned to its content version; tables cannot be mutated")
     func contentVersionPinning() throws {
         var ledger = try RunLedger()
         try ledger.append(.visit(room: "entrance"), tables: .current)
-        var future = RuleTables.current
-        future.contentVersion = 999
+        // A different-version table set (constructed the only way content
+        // releases can: the full initializer) is refused for both append
+        // and resume. RuleTables properties are private(set), so silent
+        // in-place reinterpretation of an existing ledger is impossible.
+        let future = RuleTables(
+            contentVersion: 999,
+            graph: RuleTables.current.graph,
+            spawnRoom: RuleTables.current.spawnRoom,
+            switchEffects: RuleTables.current.switchEffects,
+            lockKeys: RuleTables.current.lockKeys,
+            keySpawns: RuleTables.current.keySpawns,
+            discoverySpawns: RuleTables.current.discoverySpawns,
+            patrolCycles: RuleTables.current.patrolCycles
+        )
         #expect(throws: RunLedger.LedgerError.contentVersionMismatch(ledger: 1, tables: 999)) {
             try ledger.append(.visit(room: "brazier-hall"), tables: future)
         }
@@ -288,6 +308,56 @@ struct DeterminismTests {
         }
         // Same events against matching version still work.
         #expect(try ledger.append(.visit(room: "brazier-hall"), tables: .current).sequence == 1)
+    }
+
+    @Test("restoring a hand-built ledger with rule-illegal events throws")
+    func restoredLedgersAreRuleValidated() throws {
+        struct Row: Encodable {
+            var eventBase64: String
+            var sequence: Int
+        }
+        struct LedgerWire: Encodable {
+            var contentVersion: Int
+            var entries: [Row]
+        }
+        func ledgerJSON(rows: [Row]) throws -> Data {
+            try JSONEncoder().encode(LedgerWire(contentVersion: 1, entries: rows))
+        }
+        func row(_ event: GameEvent, _ sequence: Int) throws -> Row {
+            Row(eventBase64: try EventCodec.canonical(event).base64EncodedString(), sequence: sequence)
+        }
+
+        // A ledger whose first event is a no-contact death decodes (the
+        // event itself is well-formed) but resume must reject it — never
+        // silently skip it.
+        let restored = try JSONDecoder().decode(
+            RunLedger.self,
+            from: ledgerJSON(rows: [row(.death, 0)])
+        )
+        #expect(throws: RunLedger.LedgerError.rejected(.death)) {
+            _ = try RuleEngine.resume(tables: .current, ledger: restored)
+        }
+        // A post-terminal tail is rejected on restore too.
+        let tailLedger = try JSONDecoder().decode(
+            RunLedger.self,
+            from: ledgerJSON(rows: [
+                try row(.visit(room: "entrance"), 0),
+                try row(.retreat, 1),
+                try row(.visit(room: "brazier-hall"), 2),
+            ])
+        )
+        #expect(throws: RunLedger.LedgerError.rejected(.visit(room: "brazier-hall"))) {
+            _ = try RuleEngine.resume(tables: .current, ledger: tailLedger)
+        }
+        // Non-canonical event payloads inside ledger JSON are rejected at
+        // the decode boundary (extra key present).
+        let nonCanonicalRow = Row(
+            eventBase64: Data(#"{"visit":{"room":"entrance"},"extra":true}"#.utf8).base64EncodedString(),
+            sequence: 0
+        )
+        #expect(throws: (any Error).self) {
+            _ = try JSONDecoder().decode(RunLedger.self, from: ledgerJSON(rows: [nonCanonicalRow]))
+        }
     }
 
     @Test("ledger Codable round-trips through validated decoding")

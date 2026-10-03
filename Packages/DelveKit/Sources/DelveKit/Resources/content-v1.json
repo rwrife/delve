@@ -1,5 +1,6 @@
 {
   "contentVersion": 1,
+  "spawnRoom": "entrance",
   "graph": {
     "schemaVersion": 1,
     "rooms": [

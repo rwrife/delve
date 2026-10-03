@@ -10,32 +10,40 @@ import Foundation
 /// against the version they were recorded with (persisted with the run),
 /// never against the latest table silently.
 public struct RuleTables: Equatable, Codable, Sendable {
-    public var contentVersion: Int
-    public var graph: RoomGraph
+    // Immutable content: every property is `private(set)`. The only ways
+    // to obtain tables are the public initializer (the content-release
+    // path), decoding the versioned data file through `load` (validated),
+    // or the frozen `current` constant. In-place mutation that would
+    // silently reinterpret an existing ledger's `contentVersion` is
+    // impossible by construction.
+    public private(set) var contentVersion: Int
+    public private(set) var graph: RoomGraph
+    public private(set) var spawnRoom: String
 
     /// element id -> ordered effect ids. Toggle semantics: effects listed
     /// here flip when the element is acted on.
-    public var switchEffects: [String: [String]]
+    public private(set) var switchEffects: [String: [String]]
 
     /// lock id -> the key id that opens it.
-    public var lockKeys: [String: String]
+    public private(set) var lockKeys: [String: String]
 
     /// key item id -> room where it starts (M2 fixed placement; a key is
     /// acquired by visiting its room).
-    public var keySpawns: [String: String]
+    public private(set) var keySpawns: [String: String]
 
     /// discovery id -> room where it is found.
-    public var discoverySpawns: [String: String]
+    public private(set) var discoverySpawns: [String: String]
 
     /// patrol id -> ordered room cycle. The patrol occupies
     /// `cycle[world.patrolStep % cycle.count]` — patrol positions are a
     /// pure function of the successful-visit count, so replays land the
     /// hero and the patrols in the same room at the same moment.
-    public var patrolCycles: [String: [String]]
+    public private(set) var patrolCycles: [String: [String]]
 
     public init(
         contentVersion: Int,
         graph: RoomGraph,
+        spawnRoom: String,
         switchEffects: [String: [String]],
         lockKeys: [String: String],
         keySpawns: [String: String],
@@ -44,6 +52,7 @@ public struct RuleTables: Equatable, Codable, Sendable {
     ) {
         self.contentVersion = contentVersion
         self.graph = graph
+        self.spawnRoom = spawnRoom
         self.switchEffects = switchEffects
         self.lockKeys = lockKeys
         self.keySpawns = keySpawns
@@ -77,6 +86,7 @@ public struct RuleTables: Equatable, Codable, Sendable {
             ],
             wings: [RoomGraph.Wing(id: "wing-1")]
         ),
+        spawnRoom: "entrance",
         switchEffects: [
             "brazier-left": ["brazier-left"],
             "idol-plinth": ["idol-plinth"],
@@ -120,6 +130,9 @@ public struct RuleTables: Equatable, Codable, Sendable {
     public static func load(contentsOf data: Data) throws -> RuleTables {
         let tables = try JSONDecoder().decode(RuleTables.self, from: data)
         let roomIDs = Set(tables.graph.rooms.map(\.id))
+        guard roomIDs.contains(tables.spawnRoom) else {
+            throw TablesError.danglingReference("spawnRoom \(tables.spawnRoom)")
+        }
         for door in tables.graph.doors {
             guard roomIDs.contains(door.from), roomIDs.contains(door.to) else {
                 throw TablesError.danglingReference("door \(door.from)->\(door.to)")

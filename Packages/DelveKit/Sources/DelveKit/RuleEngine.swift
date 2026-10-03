@@ -66,6 +66,12 @@ public enum RuleEngine {
                     }
                     next.unlockedLocks.insert(lock) // unlocking with the key is permanent
                 }
+            } else {
+                // The run begins at the table's fixed spawn room only —
+                // a run can never spawn inside (or behind) a locked room.
+                guard room == tables.spawnRoom else {
+                    return StepResult(world: world, accepted: false)
+                }
             }
             next.currentRoom = room
             next.visitedRooms.insert(room)
@@ -149,11 +155,16 @@ public enum RuleEngine {
         events.reduce(world) { step($0, $1, tables: tables) }
     }
 
-    /// Recomputes the exact world state of a run from its ledger. Equal to
-    /// `replay` over the ledger's events in sequence order — the ledger is
-    /// the run's source of truth, so resume never trusts stored snapshots.
-    /// The caller's tables must match the ledger's pinned `contentVersion`;
-    /// a mismatch throws rather than silently reinterpreting history.
+    /// Recomputes the exact world state of a run from its ledger — and
+    /// proves the ledger is faithful: every row is replayed through the
+    /// rule-checked `stepResult`, and a row the rules would reject (an
+    /// out-of-contact death, action after patrol contact, post-terminal
+    /// tail, ...) throws instead of being silently skipped. A restored
+    /// ledger therefore always recomputes exactly what an append-built
+    /// ledger recomputes, or the restore is rejected outright.
+    /// The caller's tables must match the ledger's pinned
+    /// `contentVersion`; a mismatch throws rather than silently
+    /// reinterpreting history.
     public static func resume(tables: RuleTables, ledger: RunLedger) throws -> WorldState {
         guard tables.contentVersion == ledger.contentVersion else {
             throw RunLedger.LedgerError.contentVersionMismatch(
@@ -161,6 +172,14 @@ public enum RuleEngine {
                 tables: tables.contentVersion
             )
         }
-        return replay(WorldState(), ledger.entries.map(\.event), tables: tables)
+        var world = WorldState()
+        for entry in ledger.entries {
+            let result = stepResult(world, entry.event, tables: tables)
+            guard result.accepted else {
+                throw RunLedger.LedgerError.rejected(entry.event)
+            }
+            world = result.world
+        }
+        return world
     }
 }

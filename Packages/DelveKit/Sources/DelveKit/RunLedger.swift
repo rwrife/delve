@@ -19,7 +19,7 @@ import Foundation
 /// to keep the package pure and Linux-testable.
 public struct RunLedger: Equatable, Codable, Sendable {
     /// One ledger row: the event plus its monotonic sequence number.
-    public struct Entry: Equatable, Codable, Sendable {
+    public struct Entry: Equatable, Sendable {
         public var sequence: Int
         public var event: GameEvent
 
@@ -67,14 +67,9 @@ public struct RunLedger: Equatable, Codable, Sendable {
 
     /// The world state implied by the ledger so far (resume from source of
     /// truth; no cached snapshot to go stale). Requires the matching table
-    /// version.
+    /// version and a rule-faithful ledger (see `RuleEngine.resume`).
     public func world(tables: RuleTables) throws -> WorldState {
-        guard tables.contentVersion == contentVersion else {
-            throw LedgerError.contentVersionMismatch(ledger: contentVersion, tables: tables.contentVersion)
-        }
-        // Version already validated above; replay directly to keep the
-        // guard single-sourced (resume re-checks it defensively).
-        return RuleEngine.replay(WorldState(), entries.map(\.event), tables: tables)
+        try RuleEngine.resume(tables: tables, ledger: self)
     }
 
     /// Appends an event after validating the rules accept it against the
@@ -98,10 +93,33 @@ public struct RunLedger: Equatable, Codable, Sendable {
         case contentVersion, entries
     }
 
+    /// Canonical persisted form for one row: sequence + canonical event
+    /// bytes as base64. Decoding runs the bytes back through
+    /// `EventCodec.decode`, so ledger JSON that is not a canonical event
+    /// encoding (field drift, reordered members, extra keys) is rejected
+    /// at the boundary instead of silently loading.
+    private struct EntryWire: Codable {
+        var sequence: Int
+        var eventBase64: String
+    }
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let version = try container.decode(Int.self, forKey: .contentVersion)
-        let rows = try container.decode([Entry].self, forKey: .entries)
+        let wire = try container.decode([EntryWire].self, forKey: .entries)
+        var rows: [Entry] = []
+        rows.reserveCapacity(wire.count)
+        for row in wire {
+            guard let bytes = Data(base64Encoded: row.eventBase64) else {
+                throw DecodingError.dataCorrupted(
+                    DecodingError.Context(
+                        codingPath: decoder.codingPath,
+                        debugDescription: "ledger event bytes are not valid base64"
+                    )
+                )
+            }
+            rows.append(Entry(sequence: row.sequence, event: try EventCodec.decode(bytes)))
+        }
         // Routes through the validating initializer — decoding can never
         // bypass the sequence contract.
         try self.init(entries: rows, contentVersion: version)
@@ -110,6 +128,12 @@ public struct RunLedger: Equatable, Codable, Sendable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(contentVersion, forKey: .contentVersion)
-        try container.encode(entries, forKey: .entries)
+        let wire: [EntryWire] = try entries.map { entry in
+            EntryWire(
+                sequence: entry.sequence,
+                eventBase64: try EventCodec.canonical(entry.event).base64EncodedString()
+            )
+        }
+        try container.encode(wire, forKey: .entries)
     }
 }
