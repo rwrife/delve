@@ -11,76 +11,104 @@ struct WorldStateTests {
         #expect(world.visitedRooms.isEmpty)
         #expect(world.flags.isEmpty)
         #expect(world.keys.isEmpty)
+        #expect(world.unlockedLocks.isEmpty)
+        #expect(world.discoveries.isEmpty)
+        #expect(world.patrolStep == 0)
+        #expect(world.currentRoom == nil)
+        #expect(!world.isTerminal)
     }
 
-    @Test("world round-trips through Codable with stable equality")
-    func codableRoundTrip() throws {
+    @Test("legacy M1 snapshot JSON decodes forward-compatibly")
+    func legacySnapshotDecodes() throws {
+        // Exactly what M1's synthesized encoder produced (the committed
+        // DelveStore v1.sqlite fixture stores this shape) — the three
+        // original sets and nothing else.
+        let legacy = Data(
+            #"{"visitedRooms":["entrance","brazier-hall"],"flags":["brazier-left"],"keys":["bronze-key"]}"#
+                .utf8
+        )
+        let world = try JSONDecoder().decode(WorldState.self, from: legacy)
+        #expect(world.flags == ["brazier-left"])
+        #expect(world.visitedRooms == ["entrance", "brazier-hall"])
+        #expect(world.keys == ["bronze-key"])
+        #expect(world.unlockedLocks.isEmpty)
+        #expect(world.discoveries.isEmpty)
+        #expect(world.patrolStep == 0)
+        #expect(world.currentRoom == nil)
+        #expect(!world.isTerminal)
+    }
+
+    @Test("canonical codec round-trips and survives legacy field absence")
+    func canonicalRoundTrip() throws {
         let world = WorldState(
             visitedRooms: ["entrance", "brazier-hall"],
             flags: ["brazier-left"],
-            keys: ["bronze-key"]
+            keys: ["bronze-key"],
+            unlockedLocks: ["vault-door"],
+            discoveries: ["lore-threshold"],
+            patrolStep: 3,
+            currentRoom: "sealed-vault",
+            isDead: false,
+            retreated: true
         )
-        let data = try JSONEncoder().encode(world)
-        let decoded = try JSONDecoder().decode(WorldState.self, from: data)
+        let data = try WorldCodec.canonical(world)
+        let decoded = try WorldCodec.decode(data)
         #expect(decoded == world)
+
+        // Canonical bytes must also decode through the lenient synthesized
+        // path (extra sorted-array fields are set-compatible).
+        let lenient = try JSONDecoder().decode(WorldState.self, from: data)
+        #expect(lenient == world)
     }
 }
 
-@Suite("RuleEngine determinism")
-struct RuleEngineTests {
-    @Test("step stubs apply pure transitions")
-    func stubTransitions() {
-        let start = WorldState()
-        let moved = RuleEngine.step(start, .move(to: "entrance"))
-        #expect(moved.visitedRooms == ["entrance"])
+@Suite("WorldCodec determinism")
+struct WorldCodecTests {
+    @Test("equal states encode to byte-identical canonical bytes")
+    func equalStatesSameBytes() throws {
+        var a = WorldState()
+        var b = WorldState()
+        // Build two equal worlds via different insertion orders so any
+        // residual Set-order leakage would surface in the bytes.
+        let events1: [GameEvent] = [
+            .visit(room: "entrance"),
+            .action(element: "brazier-left", effects: ["brazier-left"]),
+            .visit(room: "brazier-hall"),
+            .discovery(id: "lore-threshold"),
+        ]
+        let events2: [GameEvent] = [
+            .visit(room: "entrance"),
+            .discovery(id: "lore-threshold"),
+            .action(element: "brazier-left", effects: ["brazier-left"]),
+            .visit(room: "brazier-hall"),
+        ]
+        a = RuleEngine.replay(a, events1, tables: .current)
+        b = RuleEngine.replay(b, events2, tables: .current)
+        #expect(a == b)
+        #expect(try WorldCodec.canonical(a) == WorldCodec.canonical(b))
 
-        let lit = RuleEngine.step(moved, .toggle(switchID: "brazier-left"))
-        #expect(lit.flags == ["brazier-left"])
-
-        let unlit = RuleEngine.step(lit, .toggle(switchID: "brazier-left"))
-        #expect(unlit.flags.isEmpty)
-        #expect(unlit.visitedRooms == moved.visitedRooms)
-
-        let armed = RuleEngine.step(unlit, .pickUp(key: "bronze-key"))
-        #expect(armed.keys == ["bronze-key"])
+        // Repeated encodes of the same state are identical (100x to defeat
+        // per-process hash seeding variance).
+        let first = try WorldCodec.canonical(a)
+        for _ in 0..<100 {
+            #expect(try WorldCodec.canonical(a) == first)
+        }
     }
 
-    @Test("identical replays produce identical state and canonical bytes")
-    func replayIsDeterministic() throws {
-        let commands: [Command] = [
-            .move(to: "entrance"),
-            .toggle(switchID: "brazier-left"),
-            .move(to: "brazier-hall"),
-            .pickUp(key: "bronze-key"),
-            .toggle(switchID: "idol-plinth"),
-            .move(to: "sealed-door"),
-            .toggle(switchID: "brazier-left"),
-        ]
-        let first = RuleEngine.replay(WorldState(), commands)
-        let second = RuleEngine.replay(WorldState(), commands)
-        #expect(first == second)
-
-        // Canonical serialization: JSONEncoder lays out Set members in
-        // hash order, which Swift seeds per process, so raw encode bytes of
-        // two equal states may differ across runs. The canonical form
-        // (sorted members) must be byte-identical — that is the durable
-        // determinism contract the ledger and save files rely on.
-        func canonical(_ world: WorldState) -> Data {
-            let payload: [String: [String]] = [
-                "visitedRooms": world.visitedRooms.sorted(),
-                "flags": world.flags.sorted(),
-                "keys": world.keys.sorted(),
-            ]
-            // Dictionary key order in JSONEncoder output is unspecified and
-            // platform-dependent (observed to differ between two equal
-            // payloads within one process on the macOS/Darwin runtime while
-            // the Linux runtime happened to agree). .sortedKeys is the
-            // documented deterministic formatting — the same guarantee the
-            // ledger and save files will rely on.
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = .sortedKeys
-            return (try? encoder.encode(payload)) ?? Data()
+    @Test("canonical key order is fixed regardless of dictionary layout")
+    func canonicalKeysSorted() throws {
+        let world = WorldState(flags: ["brazier-left"], patrolStep: 1, currentRoom: "entrance")
+        let bytes = try #require(String(data: try WorldCodec.canonical(world), encoding: .utf8))
+        // Field order must be alphabetical (.sortedKeys).
+        let fieldNames = ["currentRoom", "discoveries", "flags", "isDead", "keys",
+                          "patrolStep", "retreated", "unlockedLocks", "visitedRooms"]
+        var lastIndex = bytes.startIndex
+        for field in fieldNames {
+            guard let found = bytes.range(of: "\"\(field)\""), found.lowerBound >= lastIndex else {
+                Issue.record("canonical JSON missing field \(field) in sorted order: \(bytes)")
+                return
+            }
+            lastIndex = found.upperBound
         }
-        #expect(canonical(first) == canonical(second))
     }
 }

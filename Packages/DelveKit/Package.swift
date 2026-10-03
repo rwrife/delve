@@ -14,7 +14,12 @@ let package = Package(
         .library(name: "DelveKit", targets: ["DelveKit"]),
     ],
     targets: [
-        .target(name: "DelveKit"),
+        .target(
+            name: "DelveKit",
+            resources: [
+                .copy("Resources/content-v1.json"),
+            ]
+        ),
         .testTarget(name: "DelveKitTests", dependencies: ["DelveKit"]),
     ]
 )
