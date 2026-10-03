@@ -73,11 +73,13 @@ Today: standard iPhone app, iPad support disabled (`TARGETED_DEVICE_FAMILY = 1`,
 
 ## Current status and milestones
 
-Documentation/backlog scaffold only. No Swift/Xcode project, app build, test suite, game art, icon, or store artifact exists yet. See `PLAN.md` and the issue backlog for the delivery order: skeleton + CI → DelveKit deterministic core → dungeon content + quest engine → exploration UI + journal → workspace layout seam → backup/export → packaging/TestFlight.
+M1 skeleton landed: `Delve.xcodeproj` (SwiftUI app, bundle `com.infinityball.delve`, iPhone-only `TARGETED_DEVICE_FAMILY = 1` in every configuration, launch XCUITest target), the pure-Swift `Packages/DelveKit` package (`WorldState` + deterministic `RuleEngine.step` stub, swift-testing), and the GRDB `Packages/DelveStore` package (frozen v1 migration with an append-only ledger, committed byte-reproducible `v1.sqlite` fixture + seed tool). Two CI lanes are wired: Linux `swift test` for both packages plus the empty-allowlist zero-network gate, and a pinned macos-26 lane (exact Xcode 26.0.1/17A400/SDK 26.0 assertion, simulator-runtime install, build + launch UI test, post-build `UIDeviceFamily == [1]` + bundle-id asserts). No game content, exploration UI, journal, icon, or store artifact exists yet — native CI evidence lives in the Actions runs; see `docs/bootstrap-evidence.md` for the honest host-vs-CI evidence split. See `PLAN.md` and the issue backlog for the delivery order: skeleton + CI → DelveKit deterministic core → dungeon content + quest engine → exploration UI + journal → workspace layout seam → backup/export → packaging/TestFlight.
 
-## Development / build quickstart (planned)
+## Development / build quickstart
 
 - Xcode 26.0.1 (17A400), iOS SDK 26.0, Swift 6 mode (see `toolchain.json`; enforced by native CI).
-- App shell: SwiftUI; scenes: SpriteKit; pure game domain in the `DelveKit` Swift Package (Linux-testable), store in `DelveStore` (GRDB).
-- CI: Linux lane runs DelveKit tests + zero-network gate; macos-26 lane builds the app, asserts iPhone-only device family, and runs UI tests on the simulator.
+- App shell: SwiftUI; scenes: SpriteKit (from issue #4); pure game domain in `Packages/DelveKit` (Linux-testable), store in `Packages/DelveStore` (GRDB, needs libsqlite3 on Linux).
+- Package tests on Linux/macOS: `swift test --package-path Packages/DelveKit && swift test --package-path Packages/DelveStore`.
+- Gates: `bash scripts/check_zero_network.sh`, `scripts/check_native_only.sh`, `scripts/check_delvekit_purity.sh`; full simulator validation via `Scripts/ci.sh <sha>` (macOS only).
+- Regenerate the store fixture: `python3 Packages/DelveStore/Tools/regenerate_v1_fixture.py` (byte-reproducible; commit the result only after intentional schema migrations).
 - All gameplay content ships as data files (room graphs, puzzle tables) compiled into the app bundle — no downloads.

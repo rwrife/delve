@@ -36,3 +36,6 @@ __pycache__/
 *.sqlite-shm
 *.sqlite-wal
 exports/
+
+# Committed regression fixture DB (tracked deliberately; runtime DBs stay out)
+!Packages/DelveStore/Tests/DelveStoreTests/Fixtures/v1.sqlite
