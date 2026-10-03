@@ -4,10 +4,11 @@ import Foundation
 ///
 /// The ledger is the run's source of truth: `WorldState` is always
 /// recomputable from the events via `RuleEngine.resume`. Rows carry a
-/// monotonic, gap-free `sequence`, and the ledger is pinned to the
-/// `contentVersion` of the `RuleTables` it was created for — appending or
-/// resuming against a different table version is a hard error, so an old
-/// ledger can never be silently reinterpreted by new content.
+/// monotonic, gap-free `sequence`, and the ledger is pinned to the exact
+/// `RuleTables` it was built for — both its `contentVersion` AND its
+/// content `fingerprint`. Appending or resuming against any other table
+/// set is a hard error, so a ledger can never be silently reinterpreted,
+/// not even by same-version tables whose contents drifted.
 ///
 /// Every initializer path (including `Codable` decoding) validates the
 /// sequence is exactly `0..<entries.count`; there is no unvalidated route
@@ -41,12 +42,20 @@ public struct RunLedger: Equatable, Codable, Sendable {
         /// The ledger was created for a different `RuleTables` content
         /// version than the one supplied; replay semantics could differ.
         case contentVersionMismatch(ledger: Int, tables: Int)
+        /// The supplied tables carry the ledger's `contentVersion` but
+        /// different content (fingerprint mismatch) — replaying them
+        /// would silently reinterpret the run's history.
+        case tablesFingerprintMismatch(ledger: String, tables: String)
     }
 
     public private(set) var entries: [Entry]
 
     /// The `RuleTables.contentVersion` this ledger's events are valid for.
     public let contentVersion: Int
+
+    /// The content fingerprint (`RuleTables.fingerprint`) of the exact
+    /// table set this ledger was built against.
+    public let tablesFingerprint: String
 
     /// Sequence the next `append` will assign (monotonic, starts at 0).
     public var nextSequence: Int { entries.count }
@@ -56,18 +65,30 @@ public struct RunLedger: Equatable, Codable, Sendable {
     /// `0..<entries.count` — there is deliberately no unvalidated init.
     public init(
         entries: [Entry] = [],
-        contentVersion: Int = RuleTables.current.contentVersion
+        tables: RuleTables = .current
     ) throws {
         for (index, entry) in entries.enumerated() where entry.sequence != index {
             throw LedgerError.nonMonotonicSequence(expected: index, found: entry.sequence)
         }
         self.entries = entries
-        self.contentVersion = contentVersion
+        self.contentVersion = tables.contentVersion
+        self.tablesFingerprint = tables.fingerprint
+    }
+
+    /// Verifies the supplied tables are the exact table set this ledger
+    /// was pinned to (version AND content fingerprint).
+    func validate(_ tables: RuleTables) throws {
+        guard tables.contentVersion == contentVersion else {
+            throw LedgerError.contentVersionMismatch(ledger: contentVersion, tables: tables.contentVersion)
+        }
+        guard tables.fingerprint == tablesFingerprint else {
+            throw LedgerError.tablesFingerprintMismatch(ledger: tablesFingerprint, tables: tables.fingerprint)
+        }
     }
 
     /// The world state implied by the ledger so far (resume from source of
-    /// truth; no cached snapshot to go stale). Requires the matching table
-    /// version and a rule-faithful ledger (see `RuleEngine.resume`).
+    /// truth; no cached snapshot to go stale). Requires the exact pinned
+    /// tables and a rule-faithful ledger (see `RuleEngine.resume`).
     public func world(tables: RuleTables) throws -> WorldState {
         try RuleEngine.resume(tables: tables, ledger: self)
     }
@@ -79,9 +100,7 @@ public struct RunLedger: Equatable, Codable, Sendable {
         _ event: GameEvent,
         tables: RuleTables
     ) throws -> Entry {
-        guard tables.contentVersion == contentVersion else {
-            throw LedgerError.contentVersionMismatch(ledger: contentVersion, tables: tables.contentVersion)
-        }
+        try validate(tables)
         let result = RuleEngine.stepResult(try world(tables: tables), event, tables: tables)
         guard result.accepted else { throw LedgerError.rejected(event) }
         let entry = Entry(sequence: nextSequence, event: event)
@@ -90,7 +109,7 @@ public struct RunLedger: Equatable, Codable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case contentVersion, entries
+        case contentVersion, tablesFingerprint, entries
     }
 
     /// Canonical persisted form for one row: sequence + canonical event
@@ -103,13 +122,21 @@ public struct RunLedger: Equatable, Codable, Sendable {
         var eventBase64: String
     }
 
+    private struct LedgerWire: Codable {
+        var contentVersion: Int
+        var tablesFingerprint: String
+        var entries: [EntryWire]
+    }
+
     public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let version = try container.decode(Int.self, forKey: .contentVersion)
-        let wire = try container.decode([EntryWire].self, forKey: .entries)
+        // Decodes through the wire shape, then re-runs every row through
+        // the strict event codec and the validating sequence contract.
+        let wire = try LedgerWire(from: decoder)
+        self.contentVersion = wire.contentVersion
+        self.tablesFingerprint = wire.tablesFingerprint
         var rows: [Entry] = []
-        rows.reserveCapacity(wire.count)
-        for row in wire {
+        rows.reserveCapacity(wire.entries.count)
+        for row in wire.entries {
             guard let bytes = Data(base64Encoded: row.eventBase64) else {
                 throw DecodingError.dataCorrupted(
                     DecodingError.Context(
@@ -120,20 +147,23 @@ public struct RunLedger: Equatable, Codable, Sendable {
             }
             rows.append(Entry(sequence: row.sequence, event: try EventCodec.decode(bytes)))
         }
-        // Routes through the validating initializer — decoding can never
-        // bypass the sequence contract.
-        try self.init(entries: rows, contentVersion: version)
+        for (index, entry) in rows.enumerated() where entry.sequence != index {
+            throw LedgerError.nonMonotonicSequence(expected: index, found: entry.sequence)
+        }
+        self.entries = rows
     }
 
     public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(contentVersion, forKey: .contentVersion)
-        let wire: [EntryWire] = try entries.map { entry in
-            EntryWire(
-                sequence: entry.sequence,
-                eventBase64: try EventCodec.canonical(entry.event).base64EncodedString()
-            )
-        }
-        try container.encode(wire, forKey: .entries)
+        let wire = LedgerWire(
+            contentVersion: contentVersion,
+            tablesFingerprint: tablesFingerprint,
+            entries: try entries.map { entry in
+                EntryWire(
+                    sequence: entry.sequence,
+                    eventBase64: try EventCodec.canonical(entry.event).base64EncodedString()
+                )
+            }
+        )
+        try wire.encode(to: encoder)
     }
 }

@@ -8,12 +8,13 @@ struct RuleEngineTests {
     @Test("graph is versioned data: file loads and equals the in-code tables")
     func graphLoadableAsData() throws {
         // The committed data file is the source of truth; the in-code
-        // constant must match it exactly (drift = build stays honest via
-        // this test) and it round-trips through Codable (M3 loads bundled
-        // files with the identical shape).
+        // constant must match it exactly (drift = test fails) and it
+        // round-trips through Codable (M3 loads bundled files with the
+        // identical shape).
         let url = try #require(Bundle.module.url(forResource: "content-v1", withExtension: "json"))
         let loaded = try RuleTables.load(from: url)
         #expect(loaded == .current)
+        #expect(loaded.fingerprint == RuleTables.current.fingerprint)
         #expect(loaded.graph.room("sealed-vault")?.wing == "wing-1")
         #expect(loaded.graph.door(between: "brazier-hall", and: "sealed-vault")?.lock == "vault-door")
         #expect(loaded.graph.door(between: "entrance", and: "brazier-hall")?.lock == nil)
@@ -37,25 +38,31 @@ struct RuleEngineTests {
 
     @Test("switch effects toggle membership; payload must equal the table")
     func switchEffects() {
-        let lit = RuleEngine.step(WorldState(), .action(element: "brazier-left", effects: ["brazier-left"]), tables: .current)
+        // Elements live in the dungeon: the hero must have entered first.
+        let entered = RuleEngine.step(WorldState(), .visit(room: "entrance"), tables: .current)
+        let lit = RuleEngine.step(entered, .action(element: "brazier-left", effects: ["brazier-left"]), tables: .current)
         #expect(lit.flags == ["brazier-left"])
         let unlit = RuleEngine.step(lit, .action(element: "brazier-left", effects: ["brazier-left"]), tables: .current)
         #expect(unlit.flags.isEmpty)
 
+        // Acting before entering the dungeon is impossible.
+        let preEntry = RuleEngine.stepResult(WorldState(), .action(element: "brazier-left", effects: ["brazier-left"]), tables: .current)
+        #expect(!preEntry.accepted)
+        #expect(preEntry.world == WorldState())
+
         // A payload that disagrees with the frozen table is rejected —
         // the table alone decides which effects apply.
-        let world = WorldState(flags: ["brazier-left"])
-        let tampered = RuleEngine.stepResult(world, .action(element: "brazier-left", effects: []), tables: .current)
+        let tampered = RuleEngine.stepResult(entered, .action(element: "brazier-left", effects: []), tables: .current)
         #expect(!tampered.accepted)
-        #expect(tampered.world == world)
+        #expect(tampered.world == entered)
     }
 
     @Test("unknown element is rejected and leaves state untouched")
     func unknownElementRejected() {
-        let world = WorldState()
-        let result = RuleEngine.stepResult(world, .action(element: "no-such-lever", effects: ["x"]), tables: .current)
+        let entered = RuleEngine.step(WorldState(), .visit(room: "entrance"), tables: .current)
+        let result = RuleEngine.stepResult(entered, .action(element: "no-such-lever", effects: ["x"]), tables: .current)
         #expect(!result.accepted)
-        #expect(result.world == world)
+        #expect(result.world == entered)
     }
 
     @Test("lock opens only with its key, permanently and ledgered once")
@@ -146,8 +153,10 @@ struct RuleEngineTests {
         let safe = WorldState(visitedRooms: ["entrance"], patrolStep: 1, currentRoom: "entrance")
         #expect(!RuleEngine.inPatrolContact(safe, tables: .current))
         #expect(!RuleEngine.stepResult(safe, .death, tables: .current).accepted)
-        // ...and retreat is accepted when safe.
+        // ...and retreat is accepted once inside and safe.
         #expect(RuleEngine.stepResult(safe, .retreat, tables: .current).accepted)
+        // Retreat before entering the dungeon is rejected.
+        #expect(!RuleEngine.stepResult(WorldState(), .retreat, tables: .current).accepted)
     }
 
     @Test("retreat is terminal: further gameplay is rejected")
@@ -217,7 +226,7 @@ struct DeterminismTests {
             .visit(room: "sealed-vault"),
             .retreat,
         ]
-        var ledger = try RunLedger()
+        var ledger = try RunLedger(tables: .current)
         for event in events {
             #expect(try ledger.append(event, tables: .current).sequence == ledger.nextSequence - 1)
         }
@@ -232,7 +241,7 @@ struct DeterminismTests {
 
     @Test("ledger append rejects rule-illegal events and keeps sequence gaps impossible")
     func appendRejectsIllegal() throws {
-        var ledger = try RunLedger()
+        var ledger = try RunLedger(tables: .current)
         #expect(try ledger.append(.visit(room: "entrance"), tables: .current).sequence == 0)
         // Non-adjacent + locked travel is never ledgered.
         #expect(throws: RunLedger.LedgerError.rejected(.visit(room: "sealed-vault"))) {
@@ -262,14 +271,14 @@ struct DeterminismTests {
             RunLedger.Entry(sequence: 2, event: .visit(room: "entrance")),
         ]
         #expect(throws: RunLedger.LedgerError.nonMonotonicSequence(expected: 1, found: 2)) {
-            _ = try RunLedger(entries: gap)
+            _ = try RunLedger(entries: gap, tables: .current)
         }
         // Decoded ledgers route through the same validation: wire JSON
         // (canonical eventBase64 rows) with a sequence gap must throw.
         let visitB64 = try EventCodec.canonical(GameEvent.visit(room: "entrance")).base64EncodedString()
         let visitJSON = "{\"eventBase64\":\"\(visitB64)\","
         let badJSON =
-            "{\"contentVersion\":1,\"entries\":["
+            "{\"contentVersion\":1,\"tablesFingerprint\":\"\(RuleTables.current.fingerprint)\",\"entries\":["
             + visitJSON + "\"sequence\":0},"
             + visitJSON + "\"sequence\":2}]}"
         #expect(throws: RunLedger.LedgerError.nonMonotonicSequence(expected: 1, found: 2)) {
@@ -279,17 +288,42 @@ struct DeterminismTests {
             RunLedger.Entry(sequence: 0, event: .visit(room: "entrance")),
             RunLedger.Entry(sequence: 1, event: .visit(room: "entrance")),
         ]
-        #expect(try RunLedger(entries: ok).entries.count == 2)
+        #expect(try RunLedger(entries: ok, tables: .current).entries.count == 2)
     }
 
-    @Test("ledger is pinned to its content version; tables cannot be mutated")
-    func contentVersionPinning() throws {
-        var ledger = try RunLedger()
+    @Test("ledger pins version AND content fingerprint of its tables")
+    func contentFingerprintPinning() throws {
+        var ledger = try RunLedger(tables: .current)
         try ledger.append(.visit(room: "entrance"), tables: .current)
-        // A different-version table set (constructed the only way content
-        // releases can: the full initializer) is refused for both append
-        // and resume. RuleTables properties are private(set), so silent
-        // in-place reinterpretation of an existing ledger is impossible.
+
+        // Same version, different content: the fingerprint still differs,
+        // so append and resume both refuse it.
+        let tampered = RuleTables(
+            contentVersion: RuleTables.current.contentVersion,
+            graph: RuleTables.current.graph,
+            spawnRoom: RuleTables.current.spawnRoom,
+            switchEffects: RuleTables.current.switchEffects,
+            lockKeys: RuleTables.current.lockKeys,
+            keySpawns: ["bronze-key": "entrance"], // MOVED key, same version
+            discoverySpawns: RuleTables.current.discoverySpawns,
+            patrolCycles: RuleTables.current.patrolCycles
+        )
+        #expect(tampered.contentVersion == RuleTables.current.contentVersion)
+        #expect(tampered.fingerprint != RuleTables.current.fingerprint)
+        #expect(throws: RunLedger.LedgerError.tablesFingerprintMismatch(
+            ledger: RuleTables.current.fingerprint,
+            tables: tampered.fingerprint
+        )) {
+            try ledger.append(.visit(room: "brazier-hall"), tables: tampered)
+        }
+        #expect(throws: RunLedger.LedgerError.tablesFingerprintMismatch(
+            ledger: RuleTables.current.fingerprint,
+            tables: tampered.fingerprint
+        )) {
+            _ = try RuleEngine.resume(tables: tampered, ledger: ledger)
+        }
+
+        // Different version is caught by the version guard first.
         let future = RuleTables(
             contentVersion: 999,
             graph: RuleTables.current.graph,
@@ -303,11 +337,22 @@ struct DeterminismTests {
         #expect(throws: RunLedger.LedgerError.contentVersionMismatch(ledger: 1, tables: 999)) {
             try ledger.append(.visit(room: "brazier-hall"), tables: future)
         }
-        #expect(throws: RunLedger.LedgerError.contentVersionMismatch(ledger: 1, tables: 999)) {
-            _ = try RuleEngine.resume(tables: future, ledger: ledger)
-        }
-        // Same events against matching version still work.
+        // Exact pinned tables keep working.
         #expect(try ledger.append(.visit(room: "brazier-hall"), tables: .current).sequence == 1)
+    }
+
+    @Test("fingerprint is deterministic and content-sensitive")
+    func fingerprintStability() {
+        let a = RuleTables.current.fingerprint
+        for _ in 0..<20 {
+            #expect(RuleTables.current.fingerprint == a)
+        }
+        // The bundled file's tables fingerprint identically (same content).
+        let url = Bundle.module.url(forResource: "content-v1", withExtension: "json")
+        #expect(url != nil)
+        if let url, let loaded = try? RuleTables.load(from: url) {
+            #expect(loaded.fingerprint == a)
+        }
     }
 
     @Test("restoring a hand-built ledger with rule-illegal events throws")
@@ -318,10 +363,13 @@ struct DeterminismTests {
         }
         struct LedgerWire: Encodable {
             var contentVersion: Int
+            var tablesFingerprint: String
             var entries: [Row]
         }
         func ledgerJSON(rows: [Row]) throws -> Data {
-            try JSONEncoder().encode(LedgerWire(contentVersion: 1, entries: rows))
+            try JSONEncoder().encode(
+                LedgerWire(contentVersion: 1, tablesFingerprint: RuleTables.current.fingerprint, entries: rows)
+            )
         }
         func row(_ event: GameEvent, _ sequence: Int) throws -> Row {
             Row(eventBase64: try EventCodec.canonical(event).base64EncodedString(), sequence: sequence)
@@ -358,17 +406,32 @@ struct DeterminismTests {
         #expect(throws: (any Error).self) {
             _ = try JSONDecoder().decode(RunLedger.self, from: ledgerJSON(rows: [nonCanonicalRow]))
         }
+        // A restored ledger pinned to a DIFFERENT table fingerprint cannot
+        // be resumed under the current tables.
+        let wrongPin = Row(eventBase64: try EventCodec.canonical(.visit(room: "entrance")).base64EncodedString(), sequence: 0)
+        let foreignLedger = try JSONEncoder().encode(
+            // hand-pin the fingerprint to something foreign
+            LedgerWire(contentVersion: 1, tablesFingerprint: String(repeating: "0", count: 16), entries: [wrongPin])
+        )
+        let pinned = try JSONDecoder().decode(RunLedger.self, from: foreignLedger)
+        #expect(throws: RunLedger.LedgerError.tablesFingerprintMismatch(
+            ledger: String(repeating: "0", count: 16),
+            tables: RuleTables.current.fingerprint
+        )) {
+            _ = try RuleEngine.resume(tables: .current, ledger: pinned)
+        }
     }
 
     @Test("ledger Codable round-trips through validated decoding")
     func ledgerCodableRoundTrip() throws {
-        var ledger = try RunLedger()
+        var ledger = try RunLedger(tables: .current)
         try ledger.append(.visit(room: "entrance"), tables: .current)
         try ledger.append(.retreat, tables: .current)
         let data = try JSONEncoder().encode(ledger)
         let decoded = try JSONDecoder().decode(RunLedger.self, from: data)
         #expect(decoded == ledger)
         #expect(decoded.contentVersion == RuleTables.current.contentVersion)
+        #expect(decoded.tablesFingerprint == RuleTables.current.fingerprint)
     }
 
     @Test("event canonical bytes round-trip, stay stable, and reject drift")
@@ -400,7 +463,7 @@ struct DeterminismTests {
 
     @Test("death run replays byte-identically through the ledger")
     func deathRunReplays() throws {
-        var ledger = try RunLedger()
+        var ledger = try RunLedger(tables: .current)
         for room in ["entrance", "brazier-hall", "sealed-vault", "brazier-hall", "entrance"] {
             try ledger.append(.visit(room: room), tables: .current)
         }

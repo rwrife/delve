@@ -116,6 +116,27 @@ public struct RuleTables: Equatable, Codable, Sendable {
         return cycle[step % cycle.count]
     }
 
+    /// Deterministic content fingerprint of these tables: FNV-1a 64 over
+    /// the canonical (sorted-keys) JSON encoding of the whole table set.
+    /// Two table sets that differ in ANY content (key spawns, patrol
+    /// cycles, spawn room, ...) — even while sharing a `contentVersion` —
+    /// get different fingerprints, so a ledger pinned to `current`'s
+    /// fingerprint cannot be resumed under secretly-altered same-version
+    /// tables. (Content identity for replay consistency, not a security
+    /// hash; accidental drift is the threat model.)
+    public var fingerprint: String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        // RuleTables holds only Codable plain data; encoding cannot throw.
+        let bytes = (try? encoder.encode(self)) ?? Data()
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in bytes {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x0000_0100_0000_01B3
+        }
+        return String(format: "%016llx", hash)
+    }
+
     public enum TablesError: Error, Equatable {
         /// A data file decoded fine but references ids that do not exist
         /// (door to unknown room, lock with no key entry, key spawn in an

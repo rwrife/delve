@@ -44,7 +44,8 @@ public enum RuleEngine {
             next.isDead = true
 
         case .retreat:
-            guard !world.isTerminal, !inPatrolContact(world, tables: tables) else {
+            guard !world.isTerminal, world.currentRoom != nil,
+                  !inPatrolContact(world, tables: tables) else {
                 return StepResult(world: world, accepted: false)
             }
             next.retreated = true
@@ -83,7 +84,10 @@ public enum RuleEngine {
             }
 
         case .action(let element, let effects):
-            guard !world.isTerminal, !inPatrolContact(world, tables: tables) else {
+            // An element lives in a room: acting before entering the
+            // dungeon is impossible.
+            guard !world.isTerminal, world.currentRoom != nil,
+                  !inPatrolContact(world, tables: tables) else {
                 return StepResult(world: world, accepted: false)
             }
             // The recorded payload must agree with the frozen table; the
@@ -163,15 +167,10 @@ public enum RuleEngine {
     /// ledger therefore always recomputes exactly what an append-built
     /// ledger recomputes, or the restore is rejected outright.
     /// The caller's tables must match the ledger's pinned
-    /// `contentVersion`; a mismatch throws rather than silently
-    /// reinterpreting history.
+    /// `contentVersion` AND content fingerprint; a mismatch throws
+    /// rather than silently reinterpreting history.
     public static func resume(tables: RuleTables, ledger: RunLedger) throws -> WorldState {
-        guard tables.contentVersion == ledger.contentVersion else {
-            throw RunLedger.LedgerError.contentVersionMismatch(
-                ledger: ledger.contentVersion,
-                tables: tables.contentVersion
-            )
-        }
+        try ledger.validate(tables)
         var world = WorldState()
         for entry in ledger.entries {
             let result = stepResult(world, entry.event, tables: tables)
