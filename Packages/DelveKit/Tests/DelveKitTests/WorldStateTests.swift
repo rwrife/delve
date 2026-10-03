@@ -71,7 +71,15 @@ struct RuleEngineTests {
                 "flags": world.flags.sorted(),
                 "keys": world.keys.sorted(),
             ]
-            return (try? JSONEncoder().encode(payload)) ?? Data()
+            // Dictionary key order in JSONEncoder output is unspecified and
+            // platform-dependent (observed to differ between two equal
+            // payloads within one process on the macOS/Darwin runtime while
+            // the Linux runtime happened to agree). .sortedKeys is the
+            // documented deterministic formatting — the same guarantee the
+            // ledger and save files will rely on.
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .sortedKeys
+            return (try? encoder.encode(payload)) ?? Data()
         }
         #expect(canonical(first) == canonical(second))
     }
