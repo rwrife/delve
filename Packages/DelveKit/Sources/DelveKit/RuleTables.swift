@@ -56,6 +56,12 @@ public struct RuleTables: Equatable, Codable, Sendable {
     /// ids are the contract the M1 committed DelveStore fixture already
     /// references (`brazier-left`, `bronze-key`, `entrance`,
     /// `brazier-hall`).
+    ///
+    /// The source of truth is the versioned data file
+    /// `Resources/content-v1.json`, loaded through `load(contentsOf:)`;
+    /// the test suite asserts this constant equals the decoded file, so
+    /// callers get zero I/O while drift between code and data file is
+    /// impossible to merge unnoticed.
     public static let current = RuleTables(
         contentVersion: 1,
         graph: RoomGraph(
@@ -98,5 +104,51 @@ public struct RuleTables: Equatable, Codable, Sendable {
     public func patrolRoom(_ patrolID: String, atStep step: Int) -> String? {
         guard let cycle = patrolCycles[patrolID], !cycle.isEmpty else { return nil }
         return cycle[step % cycle.count]
+    }
+
+    public enum TablesError: Error, Equatable {
+        /// A data file decoded fine but references ids that do not exist
+        /// (door to unknown room, lock with no key entry, key spawn in an
+        /// unknown room, patrol cycle through an unknown room, ...). The
+        /// full graph validator lands in M3; this covers cross-reference
+        /// integrity, which is what makes replay sound.
+        case danglingReference(String)
+    }
+
+    /// Loads tables from versioned data file contents (the shape of
+    /// `Resources/content-v1.json`) and checks cross-reference integrity.
+    public static func load(contentsOf data: Data) throws -> RuleTables {
+        let tables = try JSONDecoder().decode(RuleTables.self, from: data)
+        let roomIDs = Set(tables.graph.rooms.map(\.id))
+        for door in tables.graph.doors {
+            guard roomIDs.contains(door.from), roomIDs.contains(door.to) else {
+                throw TablesError.danglingReference("door \(door.from)->\(door.to)")
+            }
+            if let lock = door.lock {
+                guard tables.lockKeys[lock] != nil else {
+                    throw TablesError.danglingReference("lock \(lock)")
+                }
+            }
+        }
+        for (key, room) in tables.keySpawns where !roomIDs.contains(room) {
+            throw TablesError.danglingReference("key \(key) spawn \(room)")
+        }
+        for (id, room) in tables.discoverySpawns where !roomIDs.contains(room) {
+            throw TablesError.danglingReference("discovery \(id) spawn \(room)")
+        }
+        for (patrol, cycle) in tables.patrolCycles {
+            guard !cycle.isEmpty else {
+                throw TablesError.danglingReference("patrol \(patrol) empty cycle")
+            }
+            for room in cycle where !roomIDs.contains(room) {
+                throw TablesError.danglingReference("patrol \(patrol) room \(room)")
+            }
+        }
+        return tables
+    }
+
+    /// Loads tables from a data file URL on disk.
+    public static func load(from url: URL) throws -> RuleTables {
+        try load(contentsOf: Data(contentsOf: url))
     }
 }

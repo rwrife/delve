@@ -8,9 +8,15 @@ import Foundation
 /// against the same tables always lands on a byte-identical state (see
 /// `WorldCodec`).
 ///
-/// Terminal runs: once `isDead` or `retreated`, gameplay events no longer
-/// mutate the world (idempotent no-ops), which keeps stray post-end ledger
-/// rows from desyncing replays.
+/// Rule enforcement invariants (the ledger only ever contains events the
+/// rules accepted, so every ledgered row is faithful history):
+/// - `action` payloads must name exactly the table's effects for the
+///   element; the table — not the payload — decides what applies.
+/// - Patrol contact is the only cause of death in M2, and it is mandatory:
+///   while the hero shares a room with a patrol, only `death` is accepted,
+///   and `death` is accepted only when in contact. A replayed ledger can
+///   therefore never survive a contact or die without one.
+/// - Terminal runs: once `isDead` or `retreated`, every event is rejected.
 public enum RuleEngine {
     /// The result of one step: the next world plus whether the event was
     /// accepted by the rules. Rejected events leave the world untouched and
@@ -31,16 +37,25 @@ public enum RuleEngine {
         var next = world
         switch event {
         case .death:
-            guard !world.isTerminal else { return StepResult(world: world, accepted: false) }
+            // Contact is the only death in M2: required, and terminal.
+            guard !world.isTerminal, inPatrolContact(world, tables: tables) else {
+                return StepResult(world: world, accepted: false)
+            }
             next.isDead = true
 
         case .retreat:
-            guard !world.isTerminal else { return StepResult(world: world, accepted: false) }
+            guard !world.isTerminal, !inPatrolContact(world, tables: tables) else {
+                return StepResult(world: world, accepted: false)
+            }
             next.retreated = true
 
         case .visit(let room):
-            guard !world.isTerminal else { return StepResult(world: world, accepted: false) }
-            guard tables.graph.room(room) != nil else { return StepResult(world: world, accepted: false) }
+            guard !world.isTerminal, !inPatrolContact(world, tables: tables) else {
+                return StepResult(world: world, accepted: false)
+            }
+            guard tables.graph.room(room) != nil else {
+                return StepResult(world: world, accepted: false)
+            }
             if let here = world.currentRoom {
                 guard let door = tables.graph.door(between: here, and: room) else {
                     return StepResult(world: world, accepted: false)
@@ -61,12 +76,16 @@ public enum RuleEngine {
                 next.keys.insert(key)
             }
 
-        case .action(let element, _):
-            guard !world.isTerminal else { return StepResult(world: world, accepted: false) }
-            guard let effects = tables.switchEffects[element] else {
+        case .action(let element, let effects):
+            guard !world.isTerminal, !inPatrolContact(world, tables: tables) else {
                 return StepResult(world: world, accepted: false)
             }
-            for effect in effects {
+            // The recorded payload must agree with the frozen table; the
+            // table alone decides which effects apply.
+            guard let tableEffects = tables.switchEffects[element], effects == tableEffects else {
+                return StepResult(world: world, accepted: false)
+            }
+            for effect in tableEffects {
                 if next.flags.contains(effect) {
                     next.flags.remove(effect)
                 } else {
@@ -75,7 +94,9 @@ public enum RuleEngine {
             }
 
         case .discovery(let id):
-            guard !world.isTerminal else { return StepResult(world: world, accepted: false) }
+            guard !world.isTerminal, !inPatrolContact(world, tables: tables) else {
+                return StepResult(world: world, accepted: false)
+            }
             guard let spawnRoom = tables.discoverySpawns[id] else {
                 return StepResult(world: world, accepted: false)
             }
@@ -111,9 +132,9 @@ public enum RuleEngine {
     }
 
     /// True when the hero's current room is occupied by a patrol at the
-    /// world's current patrol step. The game session checks this after each
-    /// accepted visit and records `.death` (a ledgered fact) on contact —
-    /// replay then reproduces the death exactly.
+    /// world's current patrol step. While true, only `.death` is accepted
+    /// (see the rule invariants above), and replay reproduces the contact
+    /// death exactly.
     public static func inPatrolContact(_ world: WorldState, tables: RuleTables) -> Bool {
         guard let room = world.currentRoom, !world.isTerminal else { return false }
         return patrolRooms(atStep: world.patrolStep, tables: tables).values.contains(room)
@@ -131,7 +152,15 @@ public enum RuleEngine {
     /// Recomputes the exact world state of a run from its ledger. Equal to
     /// `replay` over the ledger's events in sequence order — the ledger is
     /// the run's source of truth, so resume never trusts stored snapshots.
-    public static func resume(tables: RuleTables, ledger: RunLedger) -> WorldState {
-        replay(WorldState(), ledger.entries.map(\.event), tables: tables)
+    /// The caller's tables must match the ledger's pinned `contentVersion`;
+    /// a mismatch throws rather than silently reinterpreting history.
+    public static func resume(tables: RuleTables, ledger: RunLedger) throws -> WorldState {
+        guard tables.contentVersion == ledger.contentVersion else {
+            throw RunLedger.LedgerError.contentVersionMismatch(
+                ledger: ledger.contentVersion,
+                tables: tables.contentVersion
+            )
+        }
+        return replay(WorldState(), ledger.entries.map(\.event), tables: tables)
     }
 }

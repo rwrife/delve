@@ -1,0 +1,34 @@
+{
+  "contentVersion": 1,
+  "graph": {
+    "schemaVersion": 1,
+    "rooms": [
+      { "id": "entrance", "wing": "wing-1" },
+      { "id": "brazier-hall", "wing": "wing-1" },
+      { "id": "sealed-vault", "wing": "wing-1" }
+    ],
+    "doors": [
+      { "from": "entrance", "to": "brazier-hall", "lock": null },
+      { "from": "brazier-hall", "to": "sealed-vault", "lock": "vault-door" }
+    ],
+    "wings": [
+      { "id": "wing-1" }
+    ]
+  },
+  "switchEffects": {
+    "brazier-left": ["brazier-left"],
+    "idol-plinth": ["idol-plinth"]
+  },
+  "lockKeys": {
+    "vault-door": "bronze-key"
+  },
+  "keySpawns": {
+    "bronze-key": "brazier-hall"
+  },
+  "discoverySpawns": {
+    "lore-threshold": "entrance"
+  },
+  "patrolCycles": {
+    "guard-post": ["brazier-hall", "sealed-vault", "entrance"]
+  }
+}

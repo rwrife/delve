@@ -16,8 +16,9 @@ public struct RoomGraph: Equatable, Codable, Sendable {
         }
     }
 
-    /// A one-way traversable connection between two rooms. `lock` names the
-    /// puzzle element gating the door (nil = plain door).
+    /// A door connecting two rooms. Doors are traversable in both
+    /// directions; `lock` names the puzzle element gating the door
+    /// (nil = plain door). The gate applies identically either way.
     public struct Door: Equatable, Codable, Sendable, Hashable {
         public var from: String
         public var to: String

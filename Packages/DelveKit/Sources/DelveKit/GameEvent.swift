@@ -46,9 +46,20 @@ public enum EventCodec {
         return try encoder.encode(event)
     }
 
-    /// Strict decode: anything that is not a byte-faithful canonical event
-    /// throws rather than collapsing into a wrong-but-valid event.
+    public enum EventDecodingError: Error, Equatable {
+        /// Bytes decoded to a valid event but are not the canonical
+        /// encoding of it (field order or payload drift): persisted ledgers
+        /// must be canonical, or replaying them becomes untrustworthy.
+        case nonCanonical
+    }
+
+    /// Strict decode: parses, then requires the input bytes to be exactly
+    /// `canonical(event)` — non-canonical persisted data throws rather than
+    /// silently loading.
     public static func decode(_ data: Data) throws -> GameEvent {
-        try JSONDecoder().decode(GameEvent.self, from: data)
+        let event = try JSONDecoder().decode(GameEvent.self, from: data)
+        let reencoded = try canonical(event)
+        guard reencoded == data else { throw EventDecodingError.nonCanonical }
+        return event
     }
 }
