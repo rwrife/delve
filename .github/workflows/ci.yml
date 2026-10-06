@@ -32,7 +32,7 @@ jobs:
         run: swift test --package-path Packages/DelveKit
       - name: Run DelveStore package tests
         run: swift test --package-path Packages/DelveStore
-      - name: DelveKit purity gate (no UIKit/SpriteKit/GRDB)
+      - name: DelveKit purity gate (no UI or GRDB imports)
         run: bash scripts/check_delvekit_purity.sh
       - name: Zero-network gate
         run: bash scripts/check_zero_network.sh
