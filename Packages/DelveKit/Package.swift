@@ -18,6 +18,8 @@ let package = Package(
             name: "DelveKit",
             resources: [
                 .copy("Resources/content-v1.json"),
+                .copy("Resources/content-v2.json"),
+                .copy("Resources/quest-v2.json"),
             ]
         ),
         .testTarget(name: "DelveKitTests", dependencies: ["DelveKit"]),

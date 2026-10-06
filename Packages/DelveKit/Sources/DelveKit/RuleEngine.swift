@@ -65,6 +65,9 @@ public enum RuleEngine {
                     guard let key = tables.lockKeys[lock], world.keys.contains(key) else {
                         return StepResult(world: world, accepted: false) // locked: travel impossible
                     }
+                    guard (tables.lockFlags?[lock] ?? []).allSatisfy(world.flags.contains) else {
+                        return StepResult(world: world, accepted: false)
+                    }
                     next.unlockedLocks.insert(lock) // unlocking with the key is permanent
                 }
             } else {
@@ -94,6 +97,11 @@ public enum RuleEngine {
             // table alone decides which effects apply.
             guard let tableEffects = tables.switchEffects[element], effects == tableEffects else {
                 return StepResult(world: world, accepted: false)
+            }
+            if let switchRooms = tables.switchRooms {
+                guard switchRooms[element] == world.currentRoom else {
+                    return StepResult(world: world, accepted: false)
+                }
             }
             for effect in tableEffects {
                 if next.flags.contains(effect) {

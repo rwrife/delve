@@ -1,0 +1,23 @@
+{
+  "contentVersion": 2,
+  "goals": [
+    {
+      "id": "silence",
+      "text": "Listen where the stone keeps its breath.",
+      "firstEvidence": { "kind": "visit", "id": "fork" },
+      "completionEvidence": { "kind": "discovery", "id": "lore-silence" }
+    },
+    {
+      "id": "answer",
+      "text": "Let something forgotten answer you.",
+      "firstEvidence": { "kind": "discovery", "id": "lore-silence" },
+      "completionEvidence": { "kind": "action", "id": "resonant-bell" }
+    },
+    {
+      "id": "heart",
+      "text": "Look beyond the last echo.",
+      "firstEvidence": { "kind": "discovery", "id": "lore-echo" },
+      "completionEvidence": { "kind": "visit", "id": "heart-chamber" }
+    }
+  ]
+}

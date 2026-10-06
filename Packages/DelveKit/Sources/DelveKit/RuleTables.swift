@@ -19,13 +19,16 @@ public struct RuleTables: Equatable, Codable, Sendable {
     public private(set) var contentVersion: Int
     public private(set) var graph: RoomGraph
     public private(set) var spawnRoom: String
+    public private(set) var goalRoom: String?
 
     /// element id -> ordered effect ids. Toggle semantics: effects listed
     /// here flip when the element is acted on.
     public private(set) var switchEffects: [String: [String]]
+    public private(set) var switchRooms: [String: String]?
 
     /// lock id -> the key id that opens it.
     public private(set) var lockKeys: [String: String]
+    public private(set) var lockFlags: [String: [String]]?
 
     /// key item id -> room where it starts (M2 fixed placement; a key is
     /// acquired by visiting its room).
@@ -48,13 +51,19 @@ public struct RuleTables: Equatable, Codable, Sendable {
         lockKeys: [String: String],
         keySpawns: [String: String],
         discoverySpawns: [String: String],
-        patrolCycles: [String: [String]]
+        patrolCycles: [String: [String]],
+        switchRooms: [String: String]? = nil,
+        lockFlags: [String: [String]]? = nil,
+        goalRoom: String? = nil
     ) {
         self.contentVersion = contentVersion
         self.graph = graph
         self.spawnRoom = spawnRoom
+        self.goalRoom = goalRoom
         self.switchEffects = switchEffects
+        self.switchRooms = switchRooms
         self.lockKeys = lockKeys
+        self.lockFlags = lockFlags
         self.keySpawns = keySpawns
         self.discoverySpawns = discoverySpawns
         self.patrolCycles = patrolCycles
@@ -110,6 +119,15 @@ public struct RuleTables: Equatable, Codable, Sendable {
         ]
     )
 
+    /// New runs use validated bundled wing-1 data. `current` stays frozen
+    /// for ledgers pinned to the version-1 content fingerprint.
+    public static func wingOne() throws -> RuleTables {
+        guard let url = Bundle.module.url(forResource: "content-v2", withExtension: "json") else {
+            throw TablesError.danglingReference("missing content-v2.json")
+        }
+        return try load(from: url)
+    }
+
     /// Room the patrol `patrolID` occupies after `step` successful visits.
     public func patrolRoom(_ patrolID: String, atStep step: Int) -> String? {
         guard let cycle = patrolCycles[patrolID], !cycle.isEmpty else { return nil }
@@ -150,6 +168,11 @@ public struct RuleTables: Equatable, Codable, Sendable {
     /// `Resources/content-v1.json`) and checks cross-reference integrity.
     public static func load(contentsOf data: Data) throws -> RuleTables {
         let tables = try JSONDecoder().decode(RuleTables.self, from: data)
+        try GraphValidator.validate(tables)
+        return tables
+    }
+
+    static func validateReferences(_ tables: RuleTables) throws {
         let roomIDs = Set(tables.graph.rooms.map(\.id))
         guard roomIDs.contains(tables.spawnRoom) else {
             throw TablesError.danglingReference("spawnRoom \(tables.spawnRoom)")
@@ -167,6 +190,21 @@ public struct RuleTables: Equatable, Codable, Sendable {
         for (key, room) in tables.keySpawns where !roomIDs.contains(room) {
             throw TablesError.danglingReference("key \(key) spawn \(room)")
         }
+        for (lock, key) in tables.lockKeys where tables.keySpawns[key] == nil {
+            throw TablesError.danglingReference("lock \(lock) key \(key)")
+        }
+        for (element, room) in tables.switchRooms ?? [:] where !roomIDs.contains(room) {
+            throw TablesError.danglingReference("switch \(element) room \(room)")
+        }
+        for (element, _) in tables.switchEffects where tables.switchRooms != nil && tables.switchRooms?[element] == nil {
+            throw TablesError.danglingReference("switch \(element) missing room")
+        }
+        let knownFlags = Set(tables.switchEffects.values.flatMap { $0 })
+        for (lock, flags) in tables.lockFlags ?? [:] {
+            guard tables.lockKeys[lock] != nil, flags.allSatisfy(knownFlags.contains) else {
+                throw TablesError.danglingReference("lock \(lock) flag")
+            }
+        }
         for (id, room) in tables.discoverySpawns where !roomIDs.contains(room) {
             throw TablesError.danglingReference("discovery \(id) spawn \(room)")
         }
@@ -178,7 +216,6 @@ public struct RuleTables: Equatable, Codable, Sendable {
                 throw TablesError.danglingReference("patrol \(patrol) room \(room)")
             }
         }
-        return tables
     }
 
     /// Loads tables from a data file URL on disk.
