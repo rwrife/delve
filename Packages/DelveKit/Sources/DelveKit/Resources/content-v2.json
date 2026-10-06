@@ -1,0 +1,68 @@
+{
+  "contentVersion": 2,
+  "spawnRoom": "entrance",
+  "goalRoom": "heart-chamber",
+  "graph": {
+    "schemaVersion": 2,
+    "wings": [{ "id": "wing-1" }],
+    "rooms": [
+      { "id": "entrance", "wing": "wing-1" },
+      { "id": "brazier-hall", "wing": "wing-1" },
+      { "id": "sealed-vault", "wing": "wing-1" },
+      { "id": "dust-corridor", "wing": "wing-1" },
+      { "id": "fork", "wing": "wing-1" },
+      { "id": "blind-crypt", "wing": "wing-1" },
+      { "id": "ossuary", "wing": "wing-1" },
+      { "id": "west-gallery", "wing": "wing-1" },
+      { "id": "bell-niche", "wing": "wing-1" },
+      { "id": "amber-alcove", "wing": "wing-1" },
+      { "id": "sentinel-arch", "wing": "wing-1" },
+      { "id": "echo-steps", "wing": "wing-1" },
+      { "id": "stair-landing", "wing": "wing-1" },
+      { "id": "reliquary", "wing": "wing-1" },
+      { "id": "heart-chamber", "wing": "wing-1" }
+    ],
+    "doors": [
+      { "from": "entrance", "to": "brazier-hall", "lock": null },
+      { "from": "brazier-hall", "to": "sealed-vault", "lock": null },
+      { "from": "sealed-vault", "to": "dust-corridor", "lock": null },
+      { "from": "dust-corridor", "to": "fork", "lock": null },
+      { "from": "fork", "to": "blind-crypt", "lock": null },
+      { "from": "blind-crypt", "to": "ossuary", "lock": null },
+      { "from": "fork", "to": "west-gallery", "lock": null },
+      { "from": "west-gallery", "to": "bell-niche", "lock": null },
+      { "from": "fork", "to": "amber-alcove", "lock": null },
+      { "from": "fork", "to": "sentinel-arch", "lock": "arch-door" },
+      { "from": "sentinel-arch", "to": "echo-steps", "lock": null },
+      { "from": "echo-steps", "to": "stair-landing", "lock": null },
+      { "from": "stair-landing", "to": "reliquary", "lock": null },
+      { "from": "reliquary", "to": "heart-chamber", "lock": "heart-door" }
+    ]
+  },
+  "switchEffects": {
+    "brazier-left": ["brazier-left"],
+    "resonant-bell": ["bell-lit"]
+  },
+  "switchRooms": {
+    "brazier-left": "brazier-hall",
+    "resonant-bell": "bell-niche"
+  },
+  "lockKeys": {
+    "arch-door": "bronze-key",
+    "heart-door": "bronze-key"
+  },
+  "lockFlags": {
+    "heart-door": ["bell-lit"]
+  },
+  "keySpawns": {
+    "bronze-key": "amber-alcove"
+  },
+  "discoverySpawns": {
+    "lore-threshold": "entrance",
+    "lore-silence": "ossuary",
+    "lore-echo": "reliquary"
+  },
+  "patrolCycles": {
+    "crypt-watcher": ["blind-crypt", "ossuary", "blind-crypt", "ossuary", "blind-crypt", "ossuary", "ossuary"]
+  }
+}
