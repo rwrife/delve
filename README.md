@@ -1,10 +1,10 @@
 # Delve
 
-**A local-first iPhone fixed-dungeon puzzle crawler: explore a handcrafted tomb, decipher a vague quest, experiment with order-of-operations, and keep a private clue journal — no accounts, no cloud, no ads.**
+**An offline iPhone fixed-dungeon puzzle crawler. The current slice explores wing one; the clue journal and full product features below are planned.**
 
-## Overview
+## Product direction
 
-Delve is a single-player adventure game about one fixed, handcrafted dungeon. There is no procedural generation and no loot treadmill: the tomb is a puzzle space. A cryptic quest text points at goals without spelling out the route; some challenges only open in a certain order, so the real gameplay loop is *explore → observe → hypothesize → backtrack → try the other route first*. A dual-screen battle-style layout (dungeon view on one surface, persistent quest/clue journal as the companion surface) is the iPhone Duo design target, delivered today as a standard iPhone app with a workspace-layout seam for the future dual-screen SDK.
+Delve is a single-player adventure game about one fixed, handcrafted dungeon. There is no procedural generation and no loot treadmill: the tomb is a puzzle space. The planned quest UI will present the existing cryptic quest data without spelling out the route; some challenges only open in a certain order, so the real gameplay loop is *explore → observe → hypothesize → backtrack → try the other route first*. A dual-screen battle-style layout (dungeon view on one surface, persistent quest/clue journal as the companion surface) is the iPhone Duo design target, targeted through a workspace-layout seam; the journal and dual-screen integration are planned.
 
 ## Motivation
 
@@ -16,7 +16,7 @@ Most mobile "dungeon" games are procedural roguelites or gacha loot grinders —
 - Note-takers who keep a scratch map and theories while playing.
 - Anyone who wants a substantial offline game for flights and commutes with no accounts, ads, IAP, or data collection.
 
-## Concrete use cases
+## Planned product use cases
 
 1. **Session play:** open the app, resume mid-depth on the same dungeon save, push a new wing, find a sealed door that needs a lever pulled three rooms away, jot a clue note, and log out in one tap.
 2. **Order-of-operations solving:** hit a blocked goal, form a hypothesis ("the braziers must be lit before the idol moves"), backtrack deliberately, and verify — the game tracks what you've observed so the quest hint state stays honest.
@@ -33,7 +33,7 @@ Most mobile "dungeon" games are procedural roguelites or gacha loot grinders —
 6. Finish the delve → epilogue screen with your personal run record (steps, sessions, discoveries) derived honestly from the ledger.
 7. Back up via Files-app JSON export; restore with previewed replace.
 
-## MVP feature list
+## Planned full MVP feature list
 
 - One handcrafted dungeon: ~40–60 rooms across 3 wings, fixed layout and fixed puzzle placements, original theme and art direction (no third-party IP).
 - Deterministic room-state engine: switches, locks, keys, sight-lines, simple enemy patrol patterns; same inputs + same save → identical world state.
@@ -57,23 +57,27 @@ Most mobile "dungeon" games are procedural roguelites or gacha loot grinders —
 
 ## Privacy, permissions, and data storage
 
-- 100% offline. The app requests no network, no permissions beyond local notifications if reminders are ever added (default off; MVP: none).
-- All game state, journals, and records live in a local GRDB/SQLite store inside the app container. Nothing leaves the device except Files-app exports the user initiates.
-- Exports are user-visible JSON/CSV; backup restore is previewed and confirmed before replacing anything.
+- 100% offline. The app uses no network and requests no permissions.
+- Implemented run state and ledger records live in a local GRDB/SQLite store inside the app container. The implemented app has no export path; Files-app exports are planned.
+- Planned exports are JSON/CSV with previewed restore.
 - No identifiers, telemetry, or ad SDKs — CI enforces an empty network allowlist.
 
 ## iPhone Duo dual-screen design target
 
-Today: standard iPhone app, iPad support disabled (`TARGETED_DEVICE_FAMILY = 1`, built `UIDeviceFamily == [1]`). The dungeon view and the clue/quest journal are already separate scene modules, and their arrangement flows through a single `DelveWorkspaceLayout` seam. When dual-screen SDK support matures, the migration path is to bind that seam to the second display — dungeon on the primary surface, persistent journal/quest control surface on the companion — with selection/scroll continuity across fold/unfold. No current code depends on unavailable fold APIs.
+Today: standard iPhone app, iPad support disabled (`TARGETED_DEVICE_FAMILY = 1`, built `UIDeviceFamily == [1]`). The dungeon view and native exploration controls compose through `DelveWorkspaceLayout`; the clue/quest journal is planned in issue #5. When dual-screen SDK support matures, the migration path is to bind that seam to the second display — dungeon on the primary surface, persistent journal/quest control surface on the companion — with selection/scroll continuity across fold/unfold. No current code depends on unavailable fold APIs.
 
 ## Bundle ID & App Store Connect
 
 - Bundle identifier: `com.infinityball.delve` (matches `PRODUCT_BUNDLE_IDENTIFIER`, App Store Connect registered: `CREATED com.infinityball.delve`).
-- Release path: TestFlight via GitHub Actions using the repository secrets `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `ASC_TEAM_ID` (names only — values never logged), ported from the proven fleet template (rwrife/cook-console `release.yml`): `v*` tag or manual dispatch → macos-26 job → iOS 26+ SDK enforcement → signed IPA archive → TestFlight upload via the App Store Connect API → GitHub release.
+- Planned release path (not implemented): TestFlight via GitHub Actions using the repository secrets `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `ASC_TEAM_ID` (names only — values never logged), ported from the proven fleet template (rwrife/cook-console `release.yml`): `v*` tag or manual dispatch → macos-26 job → iOS 26+ SDK enforcement → signed IPA archive → TestFlight upload via the App Store Connect API → GitHub release.
 
 ## Current status and milestones
 
-M1 skeleton landed: `Delve.xcodeproj` (SwiftUI app, bundle `com.infinityball.delve`, iPhone-only `TARGETED_DEVICE_FAMILY = 1` in every configuration, launch XCUITest target), the pure-Swift `Packages/DelveKit` package (`WorldState` + deterministic `RuleEngine.step` stub, swift-testing), and the GRDB `Packages/DelveStore` package (frozen v1 migration with an append-only ledger, committed byte-reproducible `v1.sqlite` fixture + seed tool). Two CI lanes are wired: Linux `swift test` for both packages plus the empty-allowlist zero-network gate, and a pinned macos-26 lane (exact Xcode 26.0.1/17A400/SDK 26.0 assertion, simulator-runtime install, build + launch UI test, post-build `UIDeviceFamily == [1]` + bundle-id asserts). No game content, exploration UI, journal, icon, or store artifact exists yet — native CI evidence lives in the Actions runs; see `docs/bootstrap-evidence.md` for the honest host-vs-CI evidence split. See `PLAN.md` and the issue backlog for the delivery order: skeleton + CI → DelveKit deterministic core → dungeon content + quest engine → exploration UI + journal → workspace layout seam → backup/export → packaging/TestFlight.
+Implemented in the worktree: the deterministic DelveKit engine and validated 15-room wing one; ledger-derived quest APIs; SwiftUI entrance, new delve/resume, room movement, puzzle toggles, discoveries, automatic key pickup, pause, and retreat; a SpriteKit scene using clearly labeled original geometric placeholder art. Native controls have at least 56-point targets, Dynamic Type HUD text, VoiceOver labels, and text/glyph state indicators. `DelveWorkspaceLayout` composes the scene and controls without implementing the issue #5 journal.
+
+DelveStore v2 adds content-pinned replay, atomic event/snapshot writes, an active-run pointer, and immutable terminal history. Every accepted action is saved before visible world state changes; backgrounding saves and pauses. Actual engine patrol contact records death atomically with movement and returns to the entrance, as does retreat. New starts preserve earlier runs and only replace the active pointer after a successful transaction. Legacy v1 fixture rows remain intact but are not offered as resumable runs because they lack canonical replay metadata.
+
+Journal UI, run record UI, further wings, backup/export, cosmetic hero naming, epilogue, icon, release workflow, and dual-screen integration are planned. Linux package tests and local source gates can run here; native compilation, simulator journeys, VoiceOver behavior, and device accessibility still require the pinned macOS CI/device validation. No native result is claimed from this Linux worktree.
 
 ## Development / build quickstart
 

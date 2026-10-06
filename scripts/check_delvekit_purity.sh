@@ -7,9 +7,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source_root="Packages/DelveKit/Sources"
 
-if grep -RnE --include='*.swift' '^[[:space:]]*import[[:space:]]+(UIKit|SpriteKit|GRDB)([[:space:]]|$)' "$source_root"; then
-  echo "DelveKit purity gate: FAIL (UIKit/SpriteKit/GRDB import found)" >&2
+if grep -RnE --include='*.swift' '^[[:space:]]*import[[:space:]]+(UIKit|SwiftUI|AppKit|SpriteKit|GRDB)([[:space:]]|$)' "$source_root"; then
+  echo "DelveKit purity gate: FAIL (UIKit/SwiftUI/AppKit/SpriteKit/GRDB import found)" >&2
   exit 1
 fi
 
-echo "DelveKit purity gate: PASS (no UIKit/SpriteKit/GRDB imports)"
+echo "DelveKit purity gate: PASS (no UIKit/SwiftUI/AppKit/SpriteKit/GRDB imports)"

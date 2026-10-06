@@ -1,29 +1,9 @@
-Delve — Fixed-Dungeon Puzzle Crawler
+Delve — Development Preview
 
-One handcrafted tomb. Zero randomness. Everything you learn, you keep.
+Delve is an original offline iPhone puzzle crawler. The implemented exploration slice contains one fixed, handcrafted 15-room wing with deterministic switches, gated doors, key pickup, and discoveries.
 
-Delve is an offline, single-player adventure game about a fixed dungeon that never reshuffles. Explore room by room with simple one-thumb controls, read a cryptic quest that points at goals without giving you the route, and figure out which puzzles must be solved first — because the sealed door down the hall only opens if you pulled the right lever three rooms ago.
+Explore using native SwiftUI controls with large touch targets, pause in any room, and resume a saved run after closing the app. Room scenes use clearly labeled original geometric placeholder art. The SwiftUI HUD supports Dynamic Type; controls have VoiceOver labels and state text/glyphs alongside color.
 
-Delve rewards observation, notes, and deliberate backtracking instead of grinding.
+Accepted gameplay events and world snapshots save atomically in a local SQLite store. Resume replays the event ledger. Retreat or engine patrol-contact death returns to the entrance and preserves historical runs. No accounts, ads, in-app purchases, trackers, or networking are implemented.
 
-WHAT MAKES IT DIFFERENT
-
-• Fixed, handcrafted dungeon — every room, secret, and puzzle placement is designed, not generated. Your knowledge is the real progress.
-• Order-of-operations puzzles — some goals dead-end the naive route. Experiment, backtrack, retry. Nothing you do can softlock your run.
-• A genuinely vague quest — goals report only what your actions actually proved (unknown / in progress / achieved). No quest markers, no hand-holding.
-• Clue journal — pin your own notes to rooms and track quest theories in a journal that stays entirely yours. Plan your next push at the entrance.
-• Honest run records — your steps, sessions, and discoveries are derived from an append-only ledger of what actually happened.
-
-BUILT FOR REAL LIFE
-
-• 100% offline. No accounts, no sign-up, no ads, no subscriptions, no in-app purchases, no trackers, no data collection. The game does not use the network at all.
-• Instant resume — quit mid-room, come back mid-room. Progress survives app closes and restarts.
-• Your data stays on your phone — export a full JSON backup or CSV journal any time; restore is previewed before anything changes.
-• Designed for one hand — large touch targets, pause anywhere, one-thumb movement.
-• Accessible — Dynamic Type on menus and journal, VoiceOver labels, colorblind-safe state glyphs.
-
-A NOTE ON DUAL SCREENS
-
-Delve is built as a standard iPhone app today. The dungeon view and the clue journal are already separate surfaces, designed so that on a future dual-screen iPhone the journal can live permanently on the second display while you explore. No fold is required to play — it's a design target, not a gate.
-
-Delve is original work: no franchise characters, no borrowed assets, no paid shortcuts. Just a tomb, a quest, and your notebook.
+Planned features include the user-owned clue journal, quest presentation, run record screen, additional wings, JSON backup/restore, CSV export, finished art, and future dual-screen integration. These features are not available in the current slice. Native compilation, UI journeys, and device accessibility require macOS CI/device verification; this development worktree is not an App Store release.

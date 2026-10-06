@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import DelveKit
 
 /// Version one is immutable. Add a new migration for future schema changes.
 ///
@@ -9,7 +10,7 @@ import GRDB
 /// rejects in-place mutation or erasure of ledger rows — history is corrected
 /// by appending compensating events, never by rewriting).
 public enum DelveStoreSchema {
-    public static let migrationIdentifiers = ["v1"]
+    public static let migrationIdentifiers = ["v1", "v2"]
 
     public static let migrator: DatabaseMigrator = {
         var migrator = DatabaseMigrator()
@@ -49,6 +50,33 @@ public enum DelveStoreSchema {
                 BEGIN
                   SELECT RAISE(ABORT, 'ledger events are append-only; delete the run to remove its history');
                 END;
+                """)
+        }
+        migrator.registerMigration("v2") { db in
+            try db.execute(sql: """
+                CREATE TABLE run_metadata (
+                  run_id TEXT PRIMARY KEY NOT NULL REFERENCES runs(id),
+                  ledger_header BLOB NOT NULL,
+                  terminal INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE TABLE active_run (
+                  slot INTEGER PRIMARY KEY CHECK(slot = 1),
+                  run_id TEXT NOT NULL REFERENCES run_metadata(run_id)
+                );
+                CREATE TRIGGER terminal_run_no_update BEFORE UPDATE ON runs
+                WHEN EXISTS(SELECT 1 FROM run_metadata WHERE run_id = OLD.id AND terminal = 1)
+                BEGIN SELECT RAISE(ABORT, 'terminal run is immutable'); END;
+                CREATE TRIGGER recorded_run_no_delete BEFORE DELETE ON runs
+                WHEN EXISTS(SELECT 1 FROM run_metadata WHERE run_id = OLD.id)
+                BEGIN SELECT RAISE(ABORT, 'recorded run is immutable history'); END;
+                CREATE TRIGGER terminal_ledger_no_insert BEFORE INSERT ON ledger_events
+                WHEN EXISTS(SELECT 1 FROM run_metadata WHERE run_id = NEW.run_id AND terminal = 1)
+                BEGIN SELECT RAISE(ABORT, 'terminal ledger is immutable'); END;
+                CREATE TRIGGER terminal_metadata_no_update BEFORE UPDATE ON run_metadata
+                WHEN OLD.terminal = 1
+                BEGIN SELECT RAISE(ABORT, 'terminal metadata is immutable'); END;
+                CREATE TRIGGER recorded_metadata_no_delete BEFORE DELETE ON run_metadata
+                BEGIN SELECT RAISE(ABORT, 'recorded metadata is immutable'); END;
                 """)
         }
         return migrator
