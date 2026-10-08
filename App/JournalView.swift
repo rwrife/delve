@@ -26,7 +26,9 @@ struct JournalView: View {
             .navigationTitle("Journal")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }.accessibilityIdentifier("journal.done")
+                    Button { dismiss() } label: {
+                        Text("Done").font(.body)
+                    }.accessibilityIdentifier("journal.done")
                 }
             }
             .task { reload() }
