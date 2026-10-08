@@ -90,6 +90,14 @@ final class DelveLaunchTests: XCTestCase {
     }
 
     @MainActor
+    private func audit(_ app: XCUIApplication) throws {
+        try app.performAccessibilityAudit { issue in
+            print("ACCESSIBILITY ISSUE: \(issue.auditType) \(String(describing: issue.element))")
+            return false // Preserve every failure; log the element instead of guessing.
+        }
+    }
+
+    @MainActor
     func testJournalAccessibilityAtDefaultAndLargestDynamicType() throws {
         for category in ["UICTContentSizeCategoryL", "UICTContentSizeCategoryAccessibilityXXXL"] {
             let app = XCUIApplication()
@@ -98,21 +106,21 @@ final class DelveLaunchTests: XCTestCase {
             app.launch()
             tap("entrance.new", in: app)
             tap("journal.open", in: app)
-            try app.performAccessibilityAudit()
+            try audit(app)
             for (id, title) in [("journal.notes", "Room notes"), ("journal.quests", "Quest inscriptions"), ("journal.record", "Run record")] {
                 tap(id, in: app)
-                try app.performAccessibilityAudit()
+                try audit(app)
                 if id == "journal.notes" {
                     tap("note.room.entrance", in: app)
-                    try app.performAccessibilityAudit()
+                    try audit(app)
                     let editor = app.textViews["note.editor"]
                     XCTAssertTrue(editor.waitForExistence(timeout: 5))
                     editor.tap()
                     editor.typeText("AX note")
                     tap("note.save", in: app)
-                    try app.performAccessibilityAudit()
+                    try audit(app)
                     tap("note.delete", in: app)
-                    try app.performAccessibilityAudit()
+                    try audit(app)
                     app.navigationBars["Entrance"].buttons["Room notes"].tap()
                 }
                 app.navigationBars[title].buttons["Journal"].tap()
