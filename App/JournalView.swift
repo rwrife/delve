@@ -22,15 +22,12 @@ struct JournalView: View {
                     .accessibilityIdentifier("journal.quests")
                 NavigationLink("Run record") { recordPage }
                     .accessibilityIdentifier("journal.record")
+                // System toolbar text caps Dynamic Type; keep dismissal in the scalable list.
+                Button { dismiss() } label: {
+                    Text("Done").frame(maxWidth: .infinity, minHeight: 56)
+                }.accessibilityIdentifier("journal.done")
             }
             .navigationTitle("Journal")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button { dismiss() } label: {
-                        Text("Done").font(.body)
-                    }.accessibilityIdentifier("journal.done")
-                }
-            }
             .task { reload() }
         }
     }
