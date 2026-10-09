@@ -25,7 +25,9 @@ struct JournalView: View {
                 // System toolbar text caps Dynamic Type; keep dismissal in the scalable list.
                 Button { dismiss() } label: {
                     Text("Done").foregroundStyle(.primary).frame(maxWidth: .infinity, minHeight: 56)
-                }.accessibilityIdentifier("journal.done")
+                }
+                .buttonStyle(.plain) // Keep the label's primary color instead of List's tinted button style.
+                .accessibilityIdentifier("journal.done")
             }
             .navigationTitle("Journal")
             .task { reload() }
