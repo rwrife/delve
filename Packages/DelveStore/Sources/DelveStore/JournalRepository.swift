@@ -26,10 +26,12 @@ extension DelveStore {
 
     /// One pinned note per visited room per run. Empty text deletes the note.
     /// User annotations never change ledger facts or engine-derived progress.
+    /// The bound is 10,000 extended grapheme clusters (Swift Characters). SQLite's
+    /// length(text) counts code points instead, so this bound lives at the store API.
     public func setNote(_ text: String, roomID: String, runID: String, tables: RuleTables) throws {
         let stored = try run(runID, tables: tables)
         guard stored.world.visitedRooms.contains(roomID) else { throw JournalError.unknownRoom }
-        guard text.unicodeScalars.count <= 10000, !text.contains("\0") else { throw JournalError.noteTooLong }
+        guard text.count <= 10000, !text.contains("\0") else { throw JournalError.noteTooLong }
         try db.write { db in
             if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 try db.execute(sql: "DELETE FROM room_notes WHERE run_id=? AND room_id=?", arguments: [runID, roomID])

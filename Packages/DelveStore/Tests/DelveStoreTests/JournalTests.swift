@@ -44,8 +44,9 @@ import Testing
     }
     #expect(try store.run(run.id, tables: tables) == moved)
     #expect(try quest.progress(for: "silence", ledger: moved.ledger, tables: tables) == .unknown)
-    let unicode = String(repeating: "e\u{301}", count: 5000)
+    let unicode = String(repeating: "e\u{301}", count: 10000)
     try store.setNote(unicode, roomID: "entrance", runID: run.id, tables: tables)
+    #expect(try store.journal(runID: run.id, tables: tables).notes["entrance"] == unicode)
     #expect(throws: JournalError.noteTooLong) {
         try store.setNote(unicode + "e\u{301}", roomID: "entrance", runID: run.id, tables: tables)
     }

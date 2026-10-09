@@ -104,7 +104,7 @@ public enum DelveStoreSchema {
                 CREATE TABLE room_notes (
                   run_id TEXT NOT NULL REFERENCES run_metadata(run_id),
                   room_id TEXT NOT NULL,
-                  text TEXT NOT NULL CHECK(length(text) <= 10000),
+                  text TEXT NOT NULL,
                   PRIMARY KEY(run_id, room_id)
                 );
                 CREATE TABLE quest_marks (
