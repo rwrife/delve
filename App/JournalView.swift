@@ -24,7 +24,8 @@ struct JournalView: View {
                     .accessibilityIdentifier("journal.record")
                 // System toolbar text caps Dynamic Type; keep dismissal in the scalable list.
                 Button { dismiss() } label: {
-                    Text("Done").foregroundStyle(.primary).frame(maxWidth: .infinity, minHeight: 56)
+                    Text("Done").foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, minHeight: 56).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain) // Keep the label's primary color instead of List's tinted button style.
                 .accessibilityIdentifier("journal.done")
@@ -137,6 +138,18 @@ private struct RoomNoteEditor: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Pinned room note, up to 10,000 characters. Save before leaving; Delete removes the saved note.")
+                Button { persist(draft) } label: {
+                    Text("Save").foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, minHeight: 56).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("note.save")
+                Button { persist("") } label: {
+                    Text("Delete note").foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, minHeight: 56).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("note.delete")
                 TextEditor(text: $draft)
                     .frame(minHeight: 200)
                     .accessibilityLabel("Room note")
@@ -145,15 +158,6 @@ private struct RoomNoteEditor: View {
             }.padding()
         }
         .navigationTitle(room.replacingOccurrences(of: "-", with: " ").capitalized)
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Save") { persist(draft) }.accessibilityIdentifier("note.save")
-            }
-            ToolbarItem(placement: .bottomBar) {
-                Button("Delete note", role: .destructive) { persist("") }
-                    .accessibilityIdentifier("note.delete")
-            }
-        }
     }
 
     private func persist(_ text: String) {
