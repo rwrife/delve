@@ -10,6 +10,7 @@ import SpriteKit
 final class ExplorationModel {
     var store: DelveStore?
     var tables: RuleTables?
+    var quest: QuestEngine?
     var run: StoredRun?
     var exploring = false
     var paused = false
@@ -21,12 +22,13 @@ final class ExplorationModel {
     func open() {
         perform {
             let tables = try RuleTables.wingOne()
-            _ = try QuestEngine.wingOne(tables: tables)
+            let quest = try QuestEngine.wingOne(tables: tables)
             let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let store = try DelveStore.atPath(directory.appendingPathComponent("delve.sqlite").path)
             let run = try store.activeRun(tables: tables)
             self.tables = tables
+            self.quest = quest
             self.store = store
             self.run = run
         }
@@ -44,7 +46,10 @@ final class ExplorationModel {
     func resume() {
         guard let store, let tables else { return }
         perform {
-            if let next = try store.activeRun(tables: tables) { publish(next) }
+            if let active = try store.activeRun(tables: tables) {
+                let recorded = try store.resumeSession(active, tables: tables)
+                publish(recorded)
+            }
         }
     }
 
@@ -79,13 +84,22 @@ final class ExplorationModel {
     }
 }
 
-/// The single composition seam. A future companion surface belongs here;
-/// issue #5's journal is deliberately not implemented by this exploration slice.
-struct DelveWorkspaceLayout<Dungeon: View, Controls: View>: View {
+/// The single composition seam: journal is a sheet today, a companion
+/// surface in the documented dual-screen design. No unavailable SDK APIs.
+struct DelveWorkspaceLayout<Dungeon: View, Controls: View, JournalSurface: View>: View {
     @ViewBuilder var dungeon: () -> Dungeon
     @ViewBuilder var controls: () -> Controls
+    @ViewBuilder var journal: () -> JournalSurface
+    @State private var journalPresented = false
     var body: some View {
-        VStack(spacing: 16) { dungeon(); controls() }
+        VStack(spacing: 16) {
+            Button("Clue journal") { journalPresented = true }
+                .frame(minHeight: 56).buttonStyle(.bordered)
+                .accessibilityIdentifier("journal.open")
+            dungeon()
+            controls()
+        }
+        .sheet(isPresented: $journalPresented) { journal() }
     }
 }
 
@@ -113,7 +127,7 @@ struct BootstrapHomeView: View {
                             if model.run != nil {
                                 control("Resume delve", id: "entrance.resume") { model.resume() }
                             }
-                            Text("Original geometric placeholder art. Clue journal and further wings are planned.").font(.footnote)
+                            Text("Original geometric placeholder art. Further wings are planned.").font(.footnote)
                         }.padding()
                     }.accessibilityIdentifier("entrance")
                 }
@@ -174,6 +188,10 @@ struct BootstrapHomeView: View {
                             }
                             control("Retreat to entrance", id: "exploration.retreat") { model.act(.retreat) }
                         }
+                    }
+                } journal: {
+                    if let store = model.store, let quest = model.quest {
+                        JournalView(run: run, store: store, tables: tables, quest: quest)
                     }
                 }
             }

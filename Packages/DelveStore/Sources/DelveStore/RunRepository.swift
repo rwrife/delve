@@ -36,6 +36,7 @@ extension DelveStore {
     public func start(tables: RuleTables, id: String = UUID().uuidString) throws -> StoredRun {
         var ledger = try RunLedger(tables: tables)
         let header = try JSONEncoder().encode(ledger)
+        try ledger.append(.sessionStart, tables: tables)
         try ledger.append(.visit(room: tables.spawnRoom), tables: tables)
         if RuleEngine.inPatrolContact(try ledger.world(tables: tables), tables: tables) {
             try ledger.append(.death, tables: tables)
@@ -66,6 +67,11 @@ extension DelveStore {
             try finish(next, db: db)
         }
         return next
+    }
+
+    /// Record a real resume boundary, atomically, before publishing the run.
+    public func resumeSession(_ previous: StoredRun, tables: RuleTables) throws -> StoredRun {
+        try advance(previous, event: .sessionStart, tables: tables)
     }
 
     public func save(_ run: StoredRun, tables: RuleTables) throws {
@@ -119,6 +125,7 @@ extension DelveStore {
         case .visit: "visit"
         case .action: "action"
         case .discovery: "discovery"
+        case .sessionStart: "session"
         case .death: "death"
         case .retreat: "retreat"
         }

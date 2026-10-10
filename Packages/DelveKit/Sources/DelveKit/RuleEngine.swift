@@ -36,6 +36,11 @@ public enum RuleEngine {
     ) -> StepResult {
         var next = world
         switch event {
+        case .sessionStart:
+            guard !world.isTerminal, !inPatrolContact(world, tables: tables) else {
+                return StepResult(world: world, accepted: false)
+            }
+            // Session boundaries are ledger facts, not dungeon movement.
         case .death:
             // Contact is the only death in M2: required, and terminal.
             guard !world.isTerminal, inPatrolContact(world, tables: tables) else {

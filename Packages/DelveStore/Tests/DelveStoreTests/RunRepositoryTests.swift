@@ -28,7 +28,7 @@ import Testing
     }
     #expect(throws: (any Error).self) { try store.advance(run, event: .visit(room: "brazier-hall"), tables: tables) }
     #expect(try store.activeRun(tables: tables) == run)
-    #expect(try store.db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM ledger_events") } == 1)
+    #expect(try store.db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM ledger_events") } == 2)
     #expect(throws: (any Error).self) { try store.start(tables: tables) }
     #expect(try store.activeRun(tables: tables) == run)
     #expect(try store.db.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM runs") } == 1)

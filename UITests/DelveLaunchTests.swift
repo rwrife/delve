@@ -56,6 +56,86 @@ final class DelveLaunchTests: XCTestCase {
     }
 
     @MainActor
+    func testJournalNotesQuestMarksAndRecordSurviveRelaunch() {
+        let app = XCUIApplication()
+        app.launch()
+        tap("entrance.new", in: app)
+        tap("journal.open", in: app)
+        tap("journal.notes", in: app)
+        tap("note.room.entrance", in: app)
+        let editor = app.textViews["note.editor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.tap()
+        editor.typeText("A threshold clue")
+        tap("note.save", in: app)
+        XCTAssertTrue(app.staticTexts["note.status"].label.contains("saved"))
+        app.terminate()
+        app.launch()
+        tap("entrance.resume", in: app)
+        tap("journal.open", in: app)
+        tap("journal.notes", in: app)
+        XCTAssertTrue(app.staticTexts["A threshold clue"].waitForExistence(timeout: 5))
+        app.navigationBars["Room notes"].buttons["Journal"].tap()
+        tap("journal.quests", in: app)
+        let mark = app.buttons["quest.mark.silence"]
+        XCTAssertTrue(mark.waitForExistence(timeout: 5))
+        XCTAssertTrue(mark.label.contains("Not marked by you"))
+        mark.tap()
+        XCTAssertTrue(mark.label.contains("Marked by you"))
+        XCTAssertTrue(app.staticTexts["quest.engine.silence"].label.contains("Unknown"))
+        app.navigationBars["Quest inscriptions"].buttons["Journal"].tap()
+        tap("journal.record", in: app)
+        XCTAssertTrue(app.staticTexts["record.sessions"].label.contains("2"))
+        XCTAssertTrue(app.staticTexts["record.steps"].label.contains("1"))
+    }
+
+    @MainActor
+    private func audit(_ app: XCUIApplication) throws {
+        try app.performAccessibilityAudit { issue in
+            print("ACCESSIBILITY ISSUE: \(issue.auditType) \(String(describing: issue.element))")
+            if issue.element == nil {
+                print(app.debugDescription)
+                let screenshot = XCTAttachment(screenshot: app.screenshot())
+                screenshot.lifetime = .keepAlways
+                self.add(screenshot)
+            }
+            return false // Preserve every failure; log the element instead of guessing.
+        }
+    }
+
+    @MainActor
+    func testJournalAccessibilityAtDefaultAndLargestDynamicType() throws {
+        for category in ["UICTContentSizeCategoryL", "UICTContentSizeCategoryAccessibilityXXXL"] {
+            let app = XCUIApplication()
+            app.launchArguments = ["-UIPreferredContentSizeCategoryName", category]
+            app.launchEnvironment["UIPreferredContentSizeCategoryName"] = category
+            app.launch()
+            tap("entrance.new", in: app)
+            tap("journal.open", in: app)
+            try audit(app)
+            for (id, title) in [("journal.notes", "Room notes"), ("journal.quests", "Quest inscriptions"), ("journal.record", "Run record")] {
+                tap(id, in: app)
+                try audit(app)
+                if id == "journal.notes" {
+                    tap("note.room.entrance", in: app)
+                    try audit(app)
+                    let editor = app.textViews["note.editor"]
+                    XCTAssertTrue(editor.waitForExistence(timeout: 5))
+                    editor.tap()
+                    editor.typeText("AX note")
+                    tap("note.save", in: app)
+                    try audit(app)
+                    tap("note.delete", in: app)
+                    try audit(app)
+                    app.navigationBars["Entrance"].buttons["Room notes"].tap()
+                }
+                app.navigationBars[title].buttons["Journal"].tap()
+            }
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testBackgroundSaveCapturesLatestActionWithoutManualPause() {
         let app = XCUIApplication()
         app.launch()
