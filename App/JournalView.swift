@@ -38,6 +38,7 @@ struct JournalView: View {
     private var notesPage: some View {
         List {
             Text("One pinned note per visited room. Notes belong to you, not the dungeon engine.")
+                .fixedSize(horizontal: false, vertical: true)
             ForEach(run.world.visitedRooms.sorted(), id: \.self) { room in
                 NavigationLink {
                     RoomNoteEditor(room: room, initial: notes[room] ?? "") { text in
@@ -47,7 +48,9 @@ struct JournalView: View {
                 } label: {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(title(room)).font(.headline)
+                            .fixedSize(horizontal: false, vertical: true)
                         Text(notes[room] ?? "No note recorded").font(.body)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .accessibilityIdentifier("note.room.\(room)")
@@ -58,10 +61,12 @@ struct JournalView: View {
     private var questsPage: some View {
         List {
             Text("Your checkmarks are theories. Dungeon state is derived separately from recorded events.")
+                .fixedSize(horizontal: false, vertical: true)
             if let error { Text(error).foregroundStyle(.red) }
             ForEach(quest.goals, id: \.id) { goal in
                 VStack(alignment: .leading, spacing: 12) {
                     Text(goal.text).font(.headline)
+                        .fixedSize(horizontal: false, vertical: true)
                     Button {
                         let marked = !markedGoals.contains(goal.id)
                         do {
@@ -69,15 +74,21 @@ struct JournalView: View {
                             reload()
                         } catch { self.error = "Could not save your mark: \(error.localizedDescription)" }
                     } label: {
-                        Label(markedGoals.contains(goal.id) ? "Marked by you" : "Not marked by you",
-                              systemImage: markedGoals.contains(goal.id) ? "checkmark.square" : "square")
-                            .foregroundStyle(.primary)
-                            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-                            .contentShape(Rectangle())
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: markedGoals.contains(goal.id) ? "checkmark.square" : "square")
+                                .accessibilityHidden(true)
+                            Text(markedGoals.contains(goal.id) ? "Marked by you" : "Not marked by you")
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .accessibilityLabel(markedGoals.contains(goal.id) ? "Marked by you" : "Not marked by you")
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("quest.mark.\(goal.id)")
                     Text("Dungeon state: \(progress(goal.id))")
+                        .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("quest.engine.\(goal.id)")
                 }.padding(.vertical, 8)
             }
@@ -87,19 +98,26 @@ struct JournalView: View {
     private var recordPage: some View {
         List {
             Text("Ledger facts. Missing evidence is Unknown, never a guessed zero. Steps include the initial entrance visit.")
+                .fixedSize(horizontal: false, vertical: true)
             if let record = try? RunRecord.derive(from: run.ledger, tables: tables) {
-                Text("Rooms visited: \(RunRecord.display(record.roomsVisited))").accessibilityIdentifier("record.rooms")
-                Text("Movement steps: \(RunRecord.display(record.steps))").accessibilityIdentifier("record.steps")
-                Text("Sessions played: \(RunRecord.display(record.sessions))").accessibilityIdentifier("record.sessions")
+                Text("Rooms visited: \(RunRecord.display(record.roomsVisited))")
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("record.rooms")
+                Text("Movement steps: \(RunRecord.display(record.steps))")
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("record.steps")
+                Text("Sessions played: \(RunRecord.display(record.sessions))")
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("record.sessions")
                 Section("Discoveries recorded") {
                     switch record.discoveries {
-                    case .unknown: Text("Unknown")
+                    case .unknown: Text("Unknown").fixedSize(horizontal: false, vertical: true)
                     case .known(let ids):
-                        if ids.isEmpty { Text("None recorded yet") }
-                        ForEach(ids, id: \.self) { Text(title($0)) }
+                        if ids.isEmpty { Text("None recorded yet").fixedSize(horizontal: false, vertical: true) }
+                        ForEach(ids, id: \.self) { Text(title($0)).fixedSize(horizontal: false, vertical: true) }
                     }
                 }
-            } else { Text("Run record unavailable. No counts inferred.") }
+            } else { Text("Run record unavailable. No counts inferred.").fixedSize(horizontal: false, vertical: true) }
         }.navigationTitle("Run record")
     }
 

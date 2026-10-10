@@ -93,6 +93,12 @@ final class DelveLaunchTests: XCTestCase {
     private func audit(_ app: XCUIApplication) throws {
         try app.performAccessibilityAudit { issue in
             print("ACCESSIBILITY ISSUE: \(issue.auditType) \(String(describing: issue.element))")
+            if issue.element == nil {
+                print(app.debugDescription)
+                let screenshot = XCTAttachment(screenshot: app.screenshot())
+                screenshot.lifetime = .keepAlways
+                self.add(screenshot)
+            }
             return false // Preserve every failure; log the element instead of guessing.
         }
     }
