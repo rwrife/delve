@@ -127,6 +127,7 @@ private struct RoomNoteEditor: View {
     let save: @MainActor @Sendable (String) throws -> Void
     @State private var draft: String
     @State private var message: String?
+    @FocusState private var editorFocused: Bool
 
     init(room: String, initial: String, save: @escaping @MainActor @Sendable (String) throws -> Void) {
         self.room = room
@@ -138,6 +139,11 @@ private struct RoomNoteEditor: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Pinned room note, up to 10,000 characters. Save before leaving; Delete removes the saved note.")
+                if let message {
+                    Text(message)
+                        .foregroundStyle(.primary)
+                        .accessibilityIdentifier("note.status")
+                }
                 Button { persist(draft) } label: {
                     Text("Save").foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, minHeight: 56).contentShape(Rectangle())
@@ -151,16 +157,18 @@ private struct RoomNoteEditor: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("note.delete")
                 TextEditor(text: $draft)
+                    .focused($editorFocused)
                     .frame(minHeight: 200)
                     .accessibilityLabel("Room note")
                     .accessibilityIdentifier("note.editor")
-                if let message { Text(message).accessibilityIdentifier("note.status") }
             }.padding()
         }
         .navigationTitle(room.replacingOccurrences(of: "-", with: " ").capitalized)
     }
 
     private func persist(_ text: String) {
+        // Drop first responder so the keyboard never covers the status message.
+        editorFocused = false
         do {
             try save(text)
             draft = text
