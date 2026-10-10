@@ -109,13 +109,15 @@ struct JournalView: View {
                 Text("Sessions played: \(RunRecord.display(record.sessions))")
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("record.sessions")
-                Section("Discoveries recorded") {
-                    switch record.discoveries {
-                    case .unknown: Text("Unknown").fixedSize(horizontal: false, vertical: true)
-                    case .known(let ids):
-                        if ids.isEmpty { Text("None recorded yet").fixedSize(horizontal: false, vertical: true) }
-                        ForEach(ids, id: \.self) { Text(title($0)).fixedSize(horizontal: false, vertical: true) }
-                    }
+                Text("Discoveries recorded")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                switch record.discoveries {
+                case .unknown: Text("Unknown").fixedSize(horizontal: false, vertical: true)
+                case .known(let ids):
+                    if ids.isEmpty { Text("None recorded yet").fixedSize(horizontal: false, vertical: true) }
+                    ForEach(ids, id: \.self) { Text(title($0)).fixedSize(horizontal: false, vertical: true) }
                 }
             } else { Text("Run record unavailable. No counts inferred.").fixedSize(horizontal: false, vertical: true) }
         }.navigationTitle("Run record")
