@@ -71,9 +71,11 @@ struct JournalView: View {
                     } label: {
                         Label(markedGoals.contains(goal.id) ? "Marked by you" : "Not marked by you",
                               systemImage: markedGoals.contains(goal.id) ? "checkmark.square" : "square")
+                            .foregroundStyle(.primary)
                             .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.plain)
                     .accessibilityIdentifier("quest.mark.\(goal.id)")
                     Text("Dungeon state: \(progress(goal.id))")
                         .accessibilityIdentifier("quest.engine.\(goal.id)")
