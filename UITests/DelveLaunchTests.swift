@@ -92,7 +92,8 @@ final class DelveLaunchTests: XCTestCase {
     @MainActor
     private func audit(_ app: XCUIApplication) throws {
         try app.performAccessibilityAudit { issue in
-            print("ACCESSIBILITY ISSUE: \(issue.auditType) \(String(describing: issue.element))")
+            print("ACCESSIBILITY ISSUE: \(issue.auditType) \(issue.compactDescription); \(issue.detailedDescription); element: \(String(describing: issue.element))")
+            print("DYNAMIC TYPE CATEGORY: \(String(describing: app.launchEnvironment["UIPreferredContentSizeCategoryName"]))")
             if issue.element == nil {
                 print(app.debugDescription)
                 let screenshot = XCTAttachment(screenshot: app.screenshot())
