@@ -38,6 +38,7 @@ struct JournalView: View {
     private var notesPage: some View {
         List {
             Text("One pinned note per visited room. Notes belong to you, not the dungeon engine.")
+                .font(.body)
                 .fixedSize(horizontal: false, vertical: true)
             ForEach(run.world.visitedRooms.sorted(), id: \.self) { room in
                 NavigationLink {
@@ -61,6 +62,7 @@ struct JournalView: View {
     private var questsPage: some View {
         List {
             Text("Your checkmarks are theories. Dungeon state is derived separately from recorded events.")
+                .font(.body)
                 .fixedSize(horizontal: false, vertical: true)
             if let error { Text(error).foregroundStyle(.red) }
             ForEach(quest.goals, id: \.id) { goal in
@@ -78,6 +80,7 @@ struct JournalView: View {
                             Image(systemName: markedGoals.contains(goal.id) ? "checkmark.square" : "square")
                                 .accessibilityHidden(true)
                             Text(markedGoals.contains(goal.id) ? "Marked by you" : "Not marked by you")
+                                .font(.body)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         .foregroundStyle(.primary)
@@ -88,6 +91,7 @@ struct JournalView: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("quest.mark.\(goal.id)")
                     Text("Dungeon state: \(progress(goal.id))")
+                        .font(.body)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("quest.engine.\(goal.id)")
                 }.padding(.vertical, 8)
@@ -98,6 +102,7 @@ struct JournalView: View {
     private var recordPage: some View {
         List {
             Text("Ledger facts. Missing evidence is Unknown, never a guessed zero. Steps include the initial entrance visit.")
+                .font(.body)
                 .fixedSize(horizontal: false, vertical: true)
             if let record = try? RunRecord.derive(from: run.ledger, tables: tables) {
                 Text("Rooms visited: \(RunRecord.display(record.roomsVisited))")
@@ -117,12 +122,12 @@ struct JournalView: View {
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
                 switch record.discoveries {
-                case .unknown: Text("Unknown").fixedSize(horizontal: false, vertical: true)
+                case .unknown: Text("Unknown").font(.body).fixedSize(horizontal: false, vertical: true)
                 case .known(let ids):
-                    if ids.isEmpty { Text("None recorded yet").fixedSize(horizontal: false, vertical: true) }
-                    ForEach(ids, id: \.self) { Text(title($0)).fixedSize(horizontal: false, vertical: true) }
+                    if ids.isEmpty { Text("None recorded yet").font(.body).fixedSize(horizontal: false, vertical: true) }
+                    ForEach(ids, id: \.self) { Text(title($0)).font(.body).fixedSize(horizontal: false, vertical: true) }
                 }
-            } else { Text("Run record unavailable. No counts inferred.").fixedSize(horizontal: false, vertical: true) }
+            } else { Text("Run record unavailable. No counts inferred.").font(.body).fixedSize(horizontal: false, vertical: true) }
         }.navigationTitle("Run record")
     }
 
