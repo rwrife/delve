@@ -1,10 +1,10 @@
 # Delve
 
-**An offline iPhone fixed-dungeon puzzle crawler. The current slice explores wing one; the clue journal and full product features below are planned.**
+**An offline iPhone fixed-dungeon puzzle crawler. The current slice explores wing one with a clue journal; further wings and release features below are planned.**
 
 ## Product direction
 
-Delve is a single-player adventure game about one fixed, handcrafted dungeon. There is no procedural generation and no loot treadmill: the tomb is a puzzle space. The planned quest UI will present the existing cryptic quest data without spelling out the route; some challenges only open in a certain order, so the real gameplay loop is *explore → observe → hypothesize → backtrack → try the other route first*. A dual-screen battle-style layout (dungeon view on one surface, persistent quest/clue journal as the companion surface) is the iPhone Duo design target, targeted through a workspace-layout seam; the journal and dual-screen integration are planned.
+Delve is a single-player adventure game about one fixed, handcrafted dungeon. There is no procedural generation and no loot treadmill: the tomb is a puzzle space. The quest UI presents the cryptic quest data without spelling out the route; some challenges only open in a certain order, so the real gameplay loop is *explore → observe → hypothesize → backtrack → try the other route first*. A dual-screen battle-style layout (dungeon view on one surface, persistent quest/clue journal as the companion surface) is the iPhone Duo design target, targeted through a workspace-layout seam; persistent dual-screen journal integration is planned.
 
 ## Motivation
 
@@ -64,7 +64,7 @@ Most mobile "dungeon" games are procedural roguelites or gacha loot grinders —
 
 ## iPhone Duo dual-screen design target
 
-Today: standard iPhone app, iPad support disabled (`TARGETED_DEVICE_FAMILY = 1`, built `UIDeviceFamily == [1]`). The dungeon view and native exploration controls compose through `DelveWorkspaceLayout`; the clue/quest journal is planned in issue #5. When dual-screen SDK support matures, the migration path is to bind that seam to the second display — dungeon on the primary surface, persistent journal/quest control surface on the companion — with selection/scroll continuity across fold/unfold. No current code depends on unavailable fold APIs.
+Today: standard iPhone app, iPad support disabled (`TARGETED_DEVICE_FAMILY = 1`, built `UIDeviceFamily == [1]`). The dungeon view and native exploration controls compose through `DelveWorkspaceLayout`; the clue/quest journal is implemented as a sheet routed through that same seam (issue #5). When dual-screen SDK support matures, the migration path is to bind that seam to the second display — dungeon on the primary surface, persistent journal/quest control surface on the companion — with selection/scroll continuity across fold/unfold. No current code depends on unavailable fold APIs.
 
 ## Bundle ID & App Store Connect
 
@@ -73,11 +73,11 @@ Today: standard iPhone app, iPad support disabled (`TARGETED_DEVICE_FAMILY = 1`,
 
 ## Current status and milestones
 
-Implemented in the worktree: the deterministic DelveKit engine and validated 15-room wing one; ledger-derived quest APIs; SwiftUI entrance, new delve/resume, room movement, puzzle toggles, discoveries, automatic key pickup, pause, and retreat; a SpriteKit scene using clearly labeled original geometric placeholder art. Native controls have at least 56-point targets, Dynamic Type HUD text, VoiceOver labels, and text/glyph state indicators. `DelveWorkspaceLayout` composes the scene and controls without implementing the issue #5 journal.
+Implemented in the worktree: the deterministic DelveKit engine and validated 15-room wing one; ledger-derived quest APIs; SwiftUI entrance, new delve/resume, room movement, puzzle toggles, discoveries, automatic key pickup, pause, retreat, and the issue #5 clue journal with per-room notes, quest theories, and ledger run records; a SpriteKit scene using clearly labeled original geometric placeholder art. Native controls have at least 56-point targets, Dynamic Type HUD text, VoiceOver labels, and text/glyph state indicators. `DelveWorkspaceLayout` composes the scene and controls and presents the journal sheet.
 
 DelveStore v2 adds content-pinned replay, atomic event/snapshot writes, an active-run pointer, and immutable terminal history. Every accepted action is saved before visible world state changes; backgrounding saves and pauses. Actual engine patrol contact records death atomically with movement and returns to the entrance, as does retreat. New starts preserve earlier runs and only replace the active pointer after a successful transaction. Legacy v1 fixture rows remain intact but are not offered as resumable runs because they lack canonical replay metadata.
 
-Journal UI, run record UI, further wings, backup/export, cosmetic hero naming, epilogue, icon, release workflow, and dual-screen integration are planned. Linux package tests and local source gates can run here; native compilation, simulator journeys, VoiceOver behavior, and device accessibility still require the pinned macOS CI/device validation. No native result is claimed from this Linux worktree.
+Further wings, backup/export, cosmetic hero naming, epilogue, icon, release workflow, and dual-screen integration are planned. Linux package tests and local source gates can run here; native compilation, simulator journeys, VoiceOver behavior, and device accessibility still require the pinned macOS CI/device validation. No native result is claimed from this Linux worktree.
 
 ## Development / build quickstart
 

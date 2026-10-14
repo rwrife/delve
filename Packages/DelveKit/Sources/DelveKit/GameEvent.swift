@@ -30,6 +30,10 @@ public enum GameEvent: Equatable, Codable, Sendable {
     /// occurrence changes state.
     case discovery(id: String)
 
+    /// A player opened or resumed a run; records a real session boundary.
+    /// Older ledgers without session markers display session count as unknown.
+    case sessionStart
+
     /// The run ended in death (patrol contact or fatal trap).
     case death
 

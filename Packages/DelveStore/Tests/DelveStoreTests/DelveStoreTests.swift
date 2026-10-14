@@ -14,7 +14,7 @@ import Testing
             """))
     }
     #expect(tables == ["grdb_migrations", "ledger_events", "runs"])
-    #expect(try store.db.read { db in try DelveStoreSchema.migrator.appliedMigrations(db) } == ["v1", "v2"])
+    #expect(try store.db.read { db in try DelveStoreSchema.migrator.appliedMigrations(db) } == ["v1", "v2", "v3"])
 }
 
 @Test func runAndLedgerRoundTripThroughStore() throws {
@@ -108,7 +108,7 @@ import Testing
     defer { try? FileManager.default.removeItem(at: target) }
     try FileManager.default.copyItem(at: source, to: target)
     let store = try DelveStore.atPath(target.path)
-    #expect(try store.db.read { db in try DelveStoreSchema.migrator.appliedMigrations(db) } == ["v1", "v2"])
+    #expect(try store.db.read { db in try DelveStoreSchema.migrator.appliedMigrations(db) } == ["v1", "v2", "v3"])
     let hero = try store.db.read { db in
         try String.fetchOne(db, sql: "SELECT hero_name FROM runs WHERE id = ?", arguments: ["00000000-0000-0000-0000-000000000001"])
     }
