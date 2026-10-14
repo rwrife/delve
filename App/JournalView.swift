@@ -16,12 +16,20 @@ struct JournalView: View {
         NavigationStack {
             List {
                 if let error { Text(error).foregroundStyle(.red) }
-                NavigationLink("Room notes") { notesPage }
-                    .accessibilityIdentifier("journal.notes")
-                NavigationLink("Quest inscriptions") { questsPage }
-                    .accessibilityIdentifier("journal.quests")
-                NavigationLink("Run record") { recordPage }
-                    .accessibilityIdentifier("journal.record")
+                // Tinted-blue NavigationLink labels fall under 4.5:1 contrast;
+                // keep row copy primary while the link still navigates.
+                NavigationLink { notesPage } label: {
+                    Text("Room notes").foregroundStyle(.primary)
+                }
+                .accessibilityIdentifier("journal.notes")
+                NavigationLink { questsPage } label: {
+                    Text("Quest inscriptions").foregroundStyle(.primary)
+                }
+                .accessibilityIdentifier("journal.quests")
+                NavigationLink { recordPage } label: {
+                    Text("Run record").foregroundStyle(.primary)
+                }
+                .accessibilityIdentifier("journal.record")
                 // System toolbar text caps Dynamic Type; keep dismissal in the scalable list.
                 Button { dismiss() } label: {
                     Text("Done").foregroundStyle(.primary)

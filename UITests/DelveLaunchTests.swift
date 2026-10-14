@@ -100,8 +100,7 @@ final class DelveLaunchTests: XCTestCase {
         // testJournalDynamicTypeScalesMeasuredFrames is the behavioral gate.
         var found: [String] = []
         try app.performAccessibilityAudit(for: .all.subtracting(.dynamicType)) { issue in
-            let identity = issue.element.map { "\($0.identifier):\($0.label)" } ?? "no-element"
-            found.append("\(screen)|\(issue.auditType)|\(issue.compactDescription)|\(identity)")
+            found.append("\(screen)|\(issue.auditType)|\(issue.compactDescription)|\(issue.detailedDescription)|\(issue.element.map { "id=\($0.identifier) label=\($0.label)" } ?? "no-element")")
             if issue.element == nil {
                 print("AUDIT NO-ELEMENT HIERARCHY \(screen): \(app.debugDescription)")
                 let screenshot = XCTAttachment(screenshot: app.screenshot())
