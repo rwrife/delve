@@ -102,6 +102,13 @@ final class DelveLaunchTests: XCTestCase {
         try app.performAccessibilityAudit(for: .all.subtracting(.dynamicType)) { issue in
             let identity = issue.element.map { "\($0.identifier):\($0.label)" } ?? "no-element"
             found.append("\(screen)|\(issue.auditType)|\(issue.compactDescription)|\(identity)")
+            if issue.element == nil {
+                print("AUDIT NO-ELEMENT HIERARCHY \(screen): \(app.debugDescription)")
+                let screenshot = XCTAttachment(screenshot: app.screenshot())
+                screenshot.name = "Audit \(screen) \(issue.compactDescription)"
+                screenshot.lifetime = .keepAlways
+                add(screenshot)
+            }
             return true // Collect all findings; XCTFail below preserves failure.
         }
         if !found.isEmpty {
@@ -136,6 +143,12 @@ final class DelveLaunchTests: XCTestCase {
             tap("journal.record", in: app)
             for id in ["record.rooms", "record.steps", "record.sessions"] {
                 let text = app.staticTexts[id]
+                // At AX XXXL the record list overflows one screen; the
+                // lower rows only materialize once scrolled into view.
+                for _ in 0..<8 {
+                    if text.exists { break }
+                    app.swipeUp()
+                }
                 XCTAssertTrue(text.waitForExistence(timeout: 5), id)
                 frames[id] = text.frame.height
             }
