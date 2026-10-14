@@ -99,7 +99,11 @@ struct DelveWorkspaceLayout<Dungeon: View, Controls: View, JournalSurface: View>
             dungeon()
             controls()
         }
-        .sheet(isPresented: $journalPresented) { journal() }
+        // Opaque sheet prevents underlying room text from bleeding through
+        // the iOS 26 glass backdrop behind journal navigation/list controls.
+        .sheet(isPresented: $journalPresented) {
+            journal().presentationBackground(Color(uiColor: .systemBackground))
+        }
     }
 }
 
