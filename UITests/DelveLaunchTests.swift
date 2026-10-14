@@ -107,7 +107,7 @@ final class DelveLaunchTests: XCTestCase {
                 let screenshot = XCTAttachment(screenshot: app.screenshot())
                 screenshot.name = "Audit \(screen) \(issue.compactDescription)"
                 screenshot.lifetime = .keepAlways
-                add(screenshot)
+                self.add(screenshot)
             }
             return true // Collect all findings; XCTFail below preserves failure.
         }
