@@ -10,7 +10,7 @@ import DelveKit
 /// rejects in-place mutation or erasure of ledger rows — history is corrected
 /// by appending compensating events, never by rewriting).
 public enum DelveStoreSchema {
-    public static let migrationIdentifiers = ["v1", "v2"]
+    public static let migrationIdentifiers = ["v1", "v2", "v3"]
 
     public static let migrator: DatabaseMigrator = {
         var migrator = DatabaseMigrator()
@@ -77,6 +77,41 @@ public enum DelveStoreSchema {
                 BEGIN SELECT RAISE(ABORT, 'terminal metadata is immutable'); END;
                 CREATE TRIGGER recorded_metadata_no_delete BEFORE DELETE ON run_metadata
                 BEGIN SELECT RAISE(ABORT, 'recorded metadata is immutable'); END;
+                """)
+        }
+        migrator.registerMigration("v3") { db in
+            // Extend the CHECK without mutating v1/v2 or rewriting event bytes.
+            try db.execute(sql: """
+                CREATE TABLE ledger_events_v3 (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+                  kind TEXT NOT NULL CHECK(kind IN ('visit','action','discovery','death','retreat','session')),
+                  detail_json TEXT NOT NULL,
+                  occurred_at REAL NOT NULL
+                );
+                INSERT INTO ledger_events_v3 SELECT * FROM ledger_events;
+                DROP TABLE ledger_events;
+                ALTER TABLE ledger_events_v3 RENAME TO ledger_events;
+                CREATE INDEX ledger_events_run_occurred ON ledger_events(run_id, occurred_at, id);
+                CREATE TRIGGER ledger_events_no_update BEFORE UPDATE ON ledger_events
+                BEGIN SELECT RAISE(ABORT, 'ledger events are append-only'); END;
+                CREATE TRIGGER ledger_events_no_direct_delete BEFORE DELETE ON ledger_events
+                WHEN EXISTS(SELECT 1 FROM runs WHERE id = OLD.run_id)
+                BEGIN SELECT RAISE(ABORT, 'ledger events are append-only; delete the run to remove its history'); END;
+                CREATE TRIGGER terminal_ledger_no_insert BEFORE INSERT ON ledger_events
+                WHEN EXISTS(SELECT 1 FROM run_metadata WHERE run_id = NEW.run_id AND terminal = 1)
+                BEGIN SELECT RAISE(ABORT, 'terminal ledger is immutable'); END;
+                CREATE TABLE room_notes (
+                  run_id TEXT NOT NULL REFERENCES run_metadata(run_id),
+                  room_id TEXT NOT NULL,
+                  text TEXT NOT NULL,
+                  PRIMARY KEY(run_id, room_id)
+                );
+                CREATE TABLE quest_marks (
+                  run_id TEXT NOT NULL REFERENCES run_metadata(run_id),
+                  goal_id TEXT NOT NULL,
+                  PRIMARY KEY(run_id, goal_id)
+                );
                 """)
         }
         return migrator

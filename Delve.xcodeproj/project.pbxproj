@@ -10,6 +10,7 @@
 		A10000000000000000000103 /* DelveLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000203 /* DelveLaunchTests.swift */; };
 		A10000000000000000000104 /* DelveKit in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000801 /* DelveKit */; };
 		A10000000000000000000105 /* BootstrapHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000206 /* BootstrapHomeView.swift */; };
+		A10000000000000000000109 /* JournalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000209 /* JournalView.swift */; };
 		A10000000000000000000107 /* DelveStore in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000803 /* DelveStore */; };
 		A10000000000000000000108 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000208 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
@@ -31,7 +32,9 @@
 		A10000000000000000000205 /* DelveUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DelveUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000206 /* BootstrapHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootstrapHomeView.swift; sourceTree = "<group>"; };
 		A10000000000000000000208 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		A10000000000000000000209 /* JournalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
 
 /* Begin PBXFrameworksBuildPhase section */
 		A10000000000000000000401 /* Frameworks */ = {
@@ -63,6 +66,7 @@
 			children = (
 				A10000000000000000000201 /* DelveApp.swift */,
 				A10000000000000000000206 /* BootstrapHomeView.swift */,
+				A10000000000000000000209 /* JournalView.swift */,
 				A10000000000000000000208 /* PrivacyInfo.xcprivacy */,
 			);
 			path = App;
@@ -162,6 +166,7 @@
 			files = (
 				A10000000000000000000101 /* DelveApp.swift in Sources */,
 				A10000000000000000000105 /* BootstrapHomeView.swift in Sources */,
+				A10000000000000000000109 /* JournalView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
