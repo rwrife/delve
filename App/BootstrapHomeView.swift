@@ -27,10 +27,11 @@ final class ExplorationModel {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let store = try DelveStore.atPath(directory.appendingPathComponent("delve.sqlite").path)
             let matched = try store.activeRun(matching: versions)
-            let tables = matched?.tables ?? (try RuleTables.fullDungeon())
-            let quest = try QuestEngine.bundledFor(tables: tables)
-            self.tables = tables
-            self.quest = quest
+            let fallback = try RuleTables.fullDungeon()
+            let chosen = matched?.tables ?? fallback
+            let chosenQuest = try QuestEngine.bundledFor(tables: chosen)
+            self.tables = chosen
+            self.quest = chosenQuest
             self.store = store
             self.run = matched?.run
         }
