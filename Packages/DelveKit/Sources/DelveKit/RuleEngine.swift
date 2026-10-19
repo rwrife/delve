@@ -55,6 +55,17 @@ public enum RuleEngine {
             }
             next.retreated = true
 
+        case .finish:
+            // Epilogue exists only from content v3, at the goal room. v1/v2
+            // runs keep their historical no-finish behavior.
+            guard !world.isTerminal, world.currentRoom != nil,
+                  world.currentRoom == tables.goalRoom,
+                  tables.contentVersion >= 3,
+                  !inPatrolContact(world, tables: tables) else {
+                return StepResult(world: world, accepted: false)
+            }
+            next.finished = true
+
         case .visit(let room):
             guard !world.isTerminal, !inPatrolContact(world, tables: tables) else {
                 return StepResult(world: world, accepted: false)

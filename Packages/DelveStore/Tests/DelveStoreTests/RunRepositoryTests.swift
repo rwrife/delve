@@ -95,3 +95,103 @@ import Testing
     #expect(try store.activeRun(tables: tables) == moved)
     #expect(throws: (any Error).self) { try store.run(run.id, tables: .current) }
 }
+
+@Test func activeRunResolvesPinnedContentVersion() throws {
+    let versions = try RuleTables.bundledVersions()
+    let store = try DelveStore.inMemory()
+    let v2 = try RuleTables.wingOne()
+    let old = try store.start(tables: v2)
+    let matched = try store.activeRun(matching: versions)
+    #expect(matched?.run == old)
+    #expect(matched?.tables.fingerprint == v2.fingerprint)
+    // A v2 run is never reinterpreted by the v3 tables.
+    #expect(throws: (any Error).self) { try store.activeRun(tables: try RuleTables.fullDungeon()) }
+    let v3 = try RuleTables.fullDungeon()
+    let ended = try store.advance(old, event: .retreat, tables: v2)
+    let fresh = try store.start(tables: v3)
+    let nowMatched = try store.activeRun(matching: versions)
+    #expect(nowMatched?.run == fresh)
+    #expect(nowMatched?.tables.contentVersion == 3)
+    #expect(try store.run(ended.id, tables: v2) == ended)
+}
+
+@Test func finishEventPersistsTerminalizesAndSurvivesReopen() throws {
+    let v3 = try RuleTables.fullDungeon()
+    // Patrol-free twin of the shipped tables (same fingerprint-relevant
+    // puzzle data) so the legal route stays deterministic in the store lane.
+    let tables = RuleTables(contentVersion: v3.contentVersion, graph: v3.graph,
+        spawnRoom: v3.spawnRoom, switchEffects: v3.switchEffects,
+        lockKeys: v3.lockKeys, keySpawns: v3.keySpawns,
+        discoverySpawns: v3.discoverySpawns, patrolCycles: [:],
+        switchRooms: v3.switchRooms, lockFlags: v3.lockFlags, goalRoom: v3.goalRoom)
+    var ledger = try RunLedger(tables: tables)
+    try ledger.append(.sessionStart, tables: tables)
+    for room in ["entrance", "brazier-hall", "sealed-vault", "dust-corridor", "fork", "amber-alcove", "fork", "west-gallery", "bell-niche"] {
+        try ledger.append(.visit(room: room), tables: tables)
+    }
+    try ledger.append(.action(element: "resonant-bell", effects: ["bell-lit"]), tables: tables)
+    for room in ["west-gallery", "fork", "sentinel-arch", "echo-steps", "stair-landing", "reliquary", "heart-chamber", "ash-threshold", "ink-gallery", "chronicle-aisle"] {
+        try ledger.append(.visit(room: room), tables: tables)
+    }
+    try ledger.append(.discovery(id: "lore-ink"), tables: tables)
+    for room in ["quiet-stacks", "tide-landing", "lantern-bridge", "slate-crossing", "underkeep-bridge", "night-gate", "basalt-foyer", "moth-court", "glass-corridor", "ember-walk", "spiral-steps"] {
+        try ledger.append(.visit(room: room), tables: tables)
+    }
+    #expect(!RuleEngine.stepResult(try ledger.world(tables: tables), .visit(room: "star-anteroom"), tables: tables).accepted)
+    for room in ["ember-walk", "glass-corridor", "moth-court", "basalt-foyer", "prism-chapel"] {
+        try ledger.append(.visit(room: room), tables: tables)
+    }
+    try ledger.append(.discovery(id: "lore-prism"), tables: tables)
+    for room in ["basalt-foyer", "night-gate", "underkeep-bridge", "slate-crossing", "lantern-bridge", "tide-landing", "quiet-stacks", "chronicle-aisle", "memory-seat"] {
+        try ledger.append(.visit(room: room), tables: tables)
+    }
+    try ledger.append(.action(element: "memory-latch", effects: ["memory-lit"]), tables: tables)
+    for room in ["chronicle-aisle", "quiet-stacks", "tide-landing", "lantern-bridge", "slate-crossing", "underkeep-bridge", "night-gate", "basalt-foyer", "moth-court", "glass-corridor", "ember-walk", "spiral-steps", "star-anteroom"] {
+        try ledger.append(.visit(room: room), tables: tables)
+    }
+    #expect(try ledger.world(tables: tables).unlockedLocks.contains("memory-door"))
+    try ledger.append(.visit(room: "last-aperture"), tables: tables)
+    #expect(!RuleEngine.stepResult(try ledger.world(tables: tables), .visit(room: "dawn-well"), tables: tables).accepted)
+    for room in ["star-anteroom", "spiral-steps", "broken-orbit"] {
+        try ledger.append(.visit(room: room), tables: tables)
+    }
+    try ledger.append(.action(element: "orrery-lens", effects: ["star-lit"]), tables: tables)
+    for room in ["spiral-steps", "star-anteroom", "last-aperture", "dawn-well"] {
+        try ledger.append(.visit(room: room), tables: tables)
+    }
+
+    let id = UUID().uuidString
+    let store = try DelveStore.inMemory()
+    let header = try JSONEncoder().encode(RunLedger(tables: tables))
+    try store.db.write { db in
+        let now = Date().timeIntervalSince1970
+        try db.execute(sql: "INSERT INTO runs VALUES (?,?,?,?,?)", arguments: [id, "Delver", String(decoding: WorldCodec.canonical(ledger.entries.isEmpty ? WorldState() : ledger.world(tables: tables)), as: UTF8.self), now, now])
+        try db.execute(sql: "INSERT INTO run_metadata(run_id,ledger_header) VALUES (?,?)", arguments: [id, header])
+        for entry in ledger.entries {
+            var kind: String {
+                switch entry.event {
+                case .visit: "visit"
+                case .action: "action"
+                case .discovery: "discovery"
+                case .sessionStart: "session"
+                case .death: "death"
+                case .retreat: "retreat"
+                case .finish: "finish"
+                }
+            }
+            try db.execute(sql: "INSERT INTO ledger_events(run_id,kind,detail_json,occurred_at) VALUES (?,?,?,?)", arguments: [id, kind, String(decoding: try EventCodec.canonical(entry.event), as: UTF8.self), now])
+        }
+        try db.execute(sql: "INSERT INTO active_run VALUES (1,?)", arguments: [id])
+    }
+    var run = try store.run(id, tables: tables)
+    #expect(run.world.currentRoom == "dawn-well" && !run.world.isTerminal)
+    let done = try store.advance(run, event: .finish, tables: tables)
+    #expect(done.world.finished && done.world.isTerminal)
+    #expect(done.ledger.entries.last?.event == .finish)
+    #expect(try store.activeRun(matching: [tables]) == nil)
+    #expect(try store.history(tables: tables).map(\.id) == [id])
+    let reopened = try store.run(id, tables: tables)
+    #expect(reopened == done)
+    run = reopened
+    #expect(throws: (any Error).self) { try store.advance(run, event: .retreat, tables: tables) }
+}

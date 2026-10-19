@@ -1,6 +1,6 @@
 # Delve
 
-**An offline iPhone fixed-dungeon puzzle crawler. The current slice explores wing one with a clue journal; further wings and release features below are planned.**
+**An offline iPhone fixed-dungeon puzzle crawler. The current slice explores all three wings (45 rooms), with a clue journal and an epilogue run record; backup/export and release features below are planned.**
 
 ## Product direction
 
@@ -64,7 +64,7 @@ Most mobile "dungeon" games are procedural roguelites or gacha loot grinders —
 
 ## iPhone Duo dual-screen design target
 
-Today: standard iPhone app, iPad support disabled (`TARGETED_DEVICE_FAMILY = 1`, built `UIDeviceFamily == [1]`). The dungeon view and native exploration controls compose through `DelveWorkspaceLayout`; the clue/quest journal is implemented as a sheet routed through that same seam (issue #5). When dual-screen SDK support matures, the migration path is to bind that seam to the second display — dungeon on the primary surface, persistent journal/quest control surface on the companion — with selection/scroll continuity across fold/unfold. No current code depends on unavailable fold APIs.
+Today: standard iPhone app, iPad support disabled (`TARGETED_DEVICE_FAMILY = 1`, built `UIDeviceFamily == [1]`). The dungeon view and native exploration controls compose through `DelveWorkspaceLayout`; the clue/quest journal is implemented as a sheet routed through that same seam (issue #5); the full contract is `docs/dual-screen-migration.md`. When dual-screen SDK support matures, the migration path is to bind that seam to the second display — dungeon on the primary surface, persistent journal/quest control surface on the companion — with selection/scroll continuity across fold/unfold. No current code depends on unavailable fold APIs.
 
 ## Bundle ID & App Store Connect
 
@@ -77,7 +77,7 @@ Implemented in the worktree: the deterministic DelveKit engine and validated 15-
 
 DelveStore v2 adds content-pinned replay, atomic event/snapshot writes, an active-run pointer, and immutable terminal history. Every accepted action is saved before visible world state changes; backgrounding saves and pauses. Actual engine patrol contact records death atomically with movement and returns to the entrance, as does retreat. New starts preserve earlier runs and only replace the active pointer after a successful transaction. Legacy v1 fixture rows remain intact but are not offered as resumable runs because they lack canonical replay metadata.
 
-Further wings, backup/export, cosmetic hero naming, epilogue, icon, release workflow, and dual-screen integration are planned. Linux package tests and local source gates can run here; native compilation, simulator journeys, VoiceOver behavior, and device accessibility still require the pinned macOS CI/device validation. No native result is claimed from this Linux worktree.
+Backup/export, cosmetic hero naming, icon, release workflow, and dual-screen integration are planned. The migration contract is in `docs/dual-screen-migration.md`. Linux package tests and local source gates can run here; native compilation, simulator journeys, VoiceOver behavior, and device accessibility still require the pinned macOS CI/device validation. No native result is claimed from this Linux worktree.
 
 ## Development / build quickstart
 

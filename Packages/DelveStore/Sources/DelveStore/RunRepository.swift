@@ -9,7 +9,7 @@ public struct StoredRun: Equatable, Sendable {
 }
 
 public enum RunStoreError: Error, Equatable {
-    case missingRun, staleRun, invalidLedgerKind, emptyRun
+    case missingRun, staleRun, invalidLedgerKind, emptyRun, unknownContentVersion
 }
 
 extension DelveStore {
@@ -18,6 +18,20 @@ extension DelveStore {
         try db.read { db in
             guard let id = try String.fetchOne(db, sql: "SELECT run_id FROM active_run WHERE slot=1") else { return nil }
             return try readRun(id, tables: tables, db: db)
+        }
+    }
+
+    /// Select exact rules from persisted ledger identity; never reinterpret
+    /// an older active run using current content, or hide a corrupt header.
+    public func activeRun(matching versions: [RuleTables]) throws -> (run: StoredRun, tables: RuleTables)? {
+        try db.read { db in
+            guard let id = try String.fetchOne(db, sql: "SELECT run_id FROM active_run WHERE slot=1") else { return nil }
+            guard let header = try Data.fetchOne(db, sql: "SELECT ledger_header FROM run_metadata WHERE run_id=?", arguments: [id]) else { throw RunStoreError.missingRun }
+            let pinned = try JSONDecoder().decode(RunLedger.self, from: header)
+            guard let tables = versions.first(where: { $0.contentVersion == pinned.contentVersion && $0.fingerprint == pinned.tablesFingerprint }) else {
+                throw RunStoreError.unknownContentVersion
+            }
+            return (try readRun(id, tables: tables, db: db), tables)
         }
     }
 
@@ -128,6 +142,7 @@ extension DelveStore {
         case .sessionStart: "session"
         case .death: "death"
         case .retreat: "retreat"
+        case .finish: "finish"
         }
     }
 }

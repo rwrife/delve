@@ -34,6 +34,9 @@ public enum GameEvent: Equatable, Codable, Sendable {
     /// Older ledgers without session markers display session count as unknown.
     case sessionStart
 
+    /// Complete the v3 dungeon at its goal room; earlier versions cannot finish.
+    case finish
+
     /// The run ended in death (patrol contact or fatal trap).
     case death
 

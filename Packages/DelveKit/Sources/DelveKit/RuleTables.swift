@@ -121,12 +121,20 @@ public struct RuleTables: Equatable, Codable, Sendable {
 
     /// New runs use validated bundled wing-1 data. `current` stays frozen
     /// for ledgers pinned to the version-1 content fingerprint.
-    public static func wingOne() throws -> RuleTables {
-        guard let url = Bundle.module.url(forResource: "content-v2", withExtension: "json") else {
-            throw TablesError.danglingReference("missing content-v2.json")
+    public static func wingOne() throws -> RuleTables { try bundled("content-v2") }
+
+    /// New runs use all three wings; v2 remains frozen for existing ledgers.
+    public static func fullDungeon() throws -> RuleTables { try bundled("content-v3") }
+
+    private static func bundled(_ name: String) throws -> RuleTables {
+        guard let url = Bundle.module.url(forResource: name, withExtension: "json") else {
+            throw TablesError.danglingReference("missing \(name).json")
         }
         return try load(from: url)
     }
+
+    /// Resolve the active run against its pinned content, not the latest rules.
+    public static func bundledVersions() throws -> [RuleTables] { try [fullDungeon(), wingOne()] }
 
     /// Room the patrol `patrolID` occupies after `step` successful visits.
     public func patrolRoom(_ patrolID: String, atStep step: Int) -> String? {
