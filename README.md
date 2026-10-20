@@ -28,7 +28,7 @@ Most mobile "dungeon" games are procedural roguelites or gacha loot grinders —
 1. Start a new delve from the entrance screen; pick a hero name (purely cosmetic, stored locally).
 2. Explore the fixed map room-by-room with one-thumb movement controls; every room layout is deterministic — nothing reshuffles between visits.
 3. Read the vague quest text; goals show only `unknown / in-progress / achieved` states derived from your actual event ledger, never from hidden hints.
-4. Keep the clue journal open as a full-screen cover (today) / companion screen (iPhone Duo design target): free-text notes pinned to rooms, quest-goal checkmarks you own.
+4. Keep the clue journal open as a companion sheet (today) / companion screen (iPhone Duo design target): free-text notes pinned to rooms, quest-goal checkmarks you own.
 5. Die or retreat — progress that matters (visited rooms, flags, notes, achieved goals) persists; the run state machine is append-only and resumable.
 6. Finish the delve → epilogue screen with your personal run record (steps, sessions, discoveries) derived honestly from the ledger.
 7. Back up via Files-app JSON export; restore with previewed replace.
@@ -64,7 +64,7 @@ Most mobile "dungeon" games are procedural roguelites or gacha loot grinders —
 
 ## iPhone Duo dual-screen design target
 
-Today: standard iPhone app, iPad support disabled (`TARGETED_DEVICE_FAMILY = 1`, built `UIDeviceFamily == [1]`). The dungeon view and native exploration controls compose through `DelveWorkspaceLayout`; the clue/quest journal is implemented as a full-screen cover routed through that same seam (issue #5); the full contract is `docs/dual-screen-migration.md`. When dual-screen SDK support matures, the migration path is to bind that seam to the second display — dungeon on the primary surface, persistent journal/quest control surface on the companion — with selection/scroll continuity across fold/unfold. No current code depends on unavailable fold APIs.
+Today: standard iPhone app, iPad support disabled (`TARGETED_DEVICE_FAMILY = 1`, built `UIDeviceFamily == [1]`). The dungeon view and native exploration controls compose through `DelveWorkspaceLayout`; the clue/quest journal is implemented as a sheet routed through that same seam (issue #5); the full contract is `docs/dual-screen-migration.md`. When dual-screen SDK support matures, the migration path is to bind that seam to the second display — dungeon on the primary surface, persistent journal/quest control surface on the companion — with selection/scroll continuity across fold/unfold. No current code depends on unavailable fold APIs.
 
 ## Bundle ID & App Store Connect
 
@@ -73,7 +73,7 @@ Today: standard iPhone app, iPad support disabled (`TARGETED_DEVICE_FAMILY = 1`,
 
 ## Current status and milestones
 
-Implemented in the worktree: the deterministic DelveKit engine and validated 15-room wing one; ledger-derived quest APIs; SwiftUI entrance, new delve/resume, room movement, puzzle toggles, discoveries, automatic key pickup, pause, retreat, and the issue #5 clue journal with per-room notes, quest theories, and ledger run records; a SpriteKit scene using clearly labeled original geometric placeholder art. Native controls have at least 56-point targets, Dynamic Type HUD text, VoiceOver labels, and text/glyph state indicators. `DelveWorkspaceLayout` composes the scene and controls and presents the journal as a full-screen cover.
+Implemented in the worktree: the deterministic DelveKit engine and validated 15-room wing one; ledger-derived quest APIs; SwiftUI entrance, new delve/resume, room movement, puzzle toggles, discoveries, automatic key pickup, pause, retreat, and the issue #5 clue journal with per-room notes, quest theories, and ledger run records; a SpriteKit scene using clearly labeled original geometric placeholder art. Native controls have at least 56-point targets, Dynamic Type HUD text, VoiceOver labels, and text/glyph state indicators. `DelveWorkspaceLayout` composes the scene and controls and presents the journal sheet.
 
 DelveStore v2 adds content-pinned replay, atomic event/snapshot writes, an active-run pointer, and immutable terminal history. Every accepted action is saved before visible world state changes; backgrounding saves and pauses. Actual engine patrol contact records death atomically with movement and returns to the entrance, as does retreat. New starts preserve earlier runs and only replace the active pointer after a successful transaction. Legacy v1 fixture rows remain intact but are not offered as resumable runs because they lack canonical replay metadata.
 

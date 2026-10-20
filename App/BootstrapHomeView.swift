@@ -95,7 +95,7 @@ final class ExplorationModel {
     }
 }
 
-/// The single composition seam: journal is a full-screen cover today, a companion
+/// The single composition seam: journal is a sheet today, a companion
 /// surface in the documented dual-screen design. No unavailable SDK APIs.
 struct DelveWorkspaceLayout<Dungeon: View, Controls: View, JournalSurface: View>: View {
     @ViewBuilder var dungeon: () -> Dungeon
@@ -110,12 +110,9 @@ struct DelveWorkspaceLayout<Dungeon: View, Controls: View, JournalSurface: View>
             dungeon()
             controls()
         }
-        // Full-screen presentation: iOS 26 sheet dimming + glass nav chrome
-        // blur the underlying room title through the sheet top at AX XXXL,
-        // which the contrast audit flags as phantom no-element text. A
-        // full-screen surface keeps the same journal seam with zero bleed;
-        // dismissal stays on the in-list Done button (journal.done).
-        .fullScreenCover(isPresented: $journalPresented) {
+        // Opaque sheet prevents underlying room text from bleeding through
+        // the iOS 26 glass backdrop behind journal navigation/list controls.
+        .sheet(isPresented: $journalPresented) {
             journal().presentationBackground(Color(uiColor: .systemBackground))
         }
     }
