@@ -16,22 +16,19 @@ struct JournalView: View {
         NavigationStack {
             List {
                 if let error { Text(error).foregroundStyle(.red) }
-                // iOS 26's tinted link style overrides foregroundStyle on the
-                // label at large text sizes; tint the whole link with primary.
+                // Tinted-blue NavigationLink labels fall under 4.5:1 contrast;
+                // keep row copy primary while the link still navigates.
                 NavigationLink { notesPage } label: {
-                    Text("Room notes")
+                    Text("Room notes").foregroundStyle(.primary)
                 }
-                .tint(.primary)
                 .accessibilityIdentifier("journal.notes")
                 NavigationLink { questsPage } label: {
-                    Text("Quest inscriptions")
+                    Text("Quest inscriptions").foregroundStyle(.primary)
                 }
-                .tint(.primary)
                 .accessibilityIdentifier("journal.quests")
                 NavigationLink { recordPage } label: {
-                    Text("Run record")
+                    Text("Run record").foregroundStyle(.primary)
                 }
-                .tint(.primary)
                 .accessibilityIdentifier("journal.record")
                 // System toolbar text caps Dynamic Type; keep dismissal in the scalable list.
                 Button { dismiss() } label: {
@@ -48,6 +45,9 @@ struct JournalView: View {
             .toolbarBackground(.visible, for: .navigationBar)
             .task { reload() }
         }
+        // Journal's NavigationLink chevrons use tint, not their Text label's
+        // foregroundStyle. System blue fails contrast on the sheet's white rows.
+        .tint(Color(uiColor: .label))
     }
 
     private var notesPage: some View {
