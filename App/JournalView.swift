@@ -16,19 +16,22 @@ struct JournalView: View {
         NavigationStack {
             List {
                 if let error { Text(error).foregroundStyle(.red) }
-                // Tinted-blue NavigationLink labels fall under 4.5:1 contrast;
-                // keep row copy primary while the link still navigates.
+                // iOS 26's tinted link style overrides foregroundStyle on the
+                // label at large text sizes; tint the whole link with primary.
                 NavigationLink { notesPage } label: {
-                    Text("Room notes").foregroundStyle(.primary)
+                    Text("Room notes")
                 }
+                .tint(.primary)
                 .accessibilityIdentifier("journal.notes")
                 NavigationLink { questsPage } label: {
-                    Text("Quest inscriptions").foregroundStyle(.primary)
+                    Text("Quest inscriptions")
                 }
+                .tint(.primary)
                 .accessibilityIdentifier("journal.quests")
                 NavigationLink { recordPage } label: {
-                    Text("Run record").foregroundStyle(.primary)
+                    Text("Run record")
                 }
+                .tint(.primary)
                 .accessibilityIdentifier("journal.record")
                 // System toolbar text caps Dynamic Type; keep dismissal in the scalable list.
                 Button { dismiss() } label: {
