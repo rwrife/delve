@@ -11,25 +11,19 @@ struct JournalView: View {
     @State private var notes: [String: String] = [:]
     @State private var markedGoals: Set<String> = []
     @State private var error: String?
+    @State private var path: [Page] = []
+
+    private enum Page: Hashable { case notes, quests, record }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 if let error { Text(error).foregroundStyle(.red) }
-                // Tinted-blue NavigationLink labels fall under 4.5:1 contrast;
-                // keep row copy primary while the link still navigates.
-                NavigationLink { notesPage } label: {
-                    Text("Room notes").foregroundStyle(.primary)
-                }
-                .accessibilityIdentifier("journal.notes")
-                NavigationLink { questsPage } label: {
-                    Text("Quest inscriptions").foregroundStyle(.primary)
-                }
-                .accessibilityIdentifier("journal.quests")
-                NavigationLink { recordPage } label: {
-                    Text("Run record").foregroundStyle(.primary)
-                }
-                .accessibilityIdentifier("journal.record")
+                // System chevrons are gray-on-white at 1.72:1 on iOS 26;
+                // draw high-contrast row controls instead of NavigationLinks.
+                journalRow("Room notes", id: "journal.notes", page: .notes)
+                journalRow("Quest inscriptions", id: "journal.quests", page: .quests)
+                journalRow("Run record", id: "journal.record", page: .record)
                 // System toolbar text caps Dynamic Type; keep dismissal in the scalable list.
                 Button { dismiss() } label: {
                     Text("Done").foregroundStyle(.primary)
@@ -39,15 +33,25 @@ struct JournalView: View {
                 .accessibilityIdentifier("journal.done")
             }
             .navigationTitle("Journal")
-            // Keep iOS 26 glass navigation chrome opaque so enlarged title and
-            // system link indicators retain contrast over the scrolling list.
-            .toolbarBackground(Color(uiColor: .systemBackground), for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
+            .navigationDestination(for: Page.self) { page in
+                switch page {
+                case .notes: notesPage
+                case .quests: questsPage
+                case .record: recordPage
+                }
+            }
             .task { reload() }
         }
-        // Journal's NavigationLink chevrons use tint, not their Text label's
-        // foregroundStyle. System blue fails contrast on the sheet's white rows.
-        .tint(Color(uiColor: .label))
+    }
+
+    private func journalRow(_ title: String, id: String, page: Page) -> some View {
+        Button { path.append(page) } label: {
+            Text(title).foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(id)
     }
 
     private var notesPage: some View {
