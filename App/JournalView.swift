@@ -39,6 +39,10 @@ struct JournalView: View {
                 .accessibilityIdentifier("journal.done")
             }
             .navigationTitle("Journal")
+            // Keep iOS 26 glass navigation chrome opaque so enlarged title and
+            // system link indicators retain contrast over the scrolling list.
+            .toolbarBackground(Color(uiColor: .systemBackground), for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .task { reload() }
         }
     }
