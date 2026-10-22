@@ -46,6 +46,9 @@ public struct WorldState: Equatable, Codable, Sendable {
     /// mutate the world.
     public var retreated: Bool
 
+    /// Completed v3 goal, distinct from death and deliberate retreat.
+    public var finished: Bool
+
     public init(
         visitedRooms: Set<String> = [],
         flags: Set<String> = [],
@@ -55,7 +58,8 @@ public struct WorldState: Equatable, Codable, Sendable {
         patrolStep: Int = 0,
         currentRoom: String? = nil,
         isDead: Bool = false,
-        retreated: Bool = false
+        retreated: Bool = false,
+        finished: Bool = false
     ) {
         self.visitedRooms = visitedRooms
         self.flags = flags
@@ -66,15 +70,16 @@ public struct WorldState: Equatable, Codable, Sendable {
         self.currentRoom = currentRoom
         self.isDead = isDead
         self.retreated = retreated
+        self.finished = finished
     }
 
-    /// True once the run has ended (death or retreat); no further gameplay
-    /// events apply.
-    public var isTerminal: Bool { isDead || retreated }
+    /// True once the run has ended (death, retreat, or finish); no further
+    /// gameplay events apply.
+    public var isTerminal: Bool { isDead || retreated || finished }
 
     private enum CodingKeys: String, CodingKey {
         case visitedRooms, flags, keys, unlockedLocks, discoveries
-        case patrolStep, currentRoom, isDead, retreated
+        case patrolStep, currentRoom, isDead, retreated, finished
     }
 
     /// Lenient decoding: every field is optional and defaults to its blank
@@ -92,6 +97,7 @@ public struct WorldState: Equatable, Codable, Sendable {
         currentRoom = try container.decodeIfPresent(String.self, forKey: .currentRoom)
         isDead = try container.decodeIfPresent(Bool.self, forKey: .isDead) ?? false
         retreated = try container.decodeIfPresent(Bool.self, forKey: .retreated) ?? false
+        finished = try container.decodeIfPresent(Bool.self, forKey: .finished) ?? false
     }
 
     /// Explicit encoding: every key is always present (optionals encode
@@ -111,5 +117,6 @@ public struct WorldState: Equatable, Codable, Sendable {
         try container.encode(currentRoom, forKey: .currentRoom)
         try container.encode(isDead, forKey: .isDead)
         try container.encode(retreated, forKey: .retreated)
+        try container.encode(finished, forKey: .finished)
     }
 }

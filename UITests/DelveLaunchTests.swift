@@ -243,4 +243,40 @@ final class DelveLaunchTests: XCTestCase {
         tap("move.sentinel-arch", in: app)
         tap("exploration.retreat", in: app)
     }
+
+    @MainActor
+    func testFullDungeonFinishJourneyAndEpilogueRecord() {
+        let app = XCUIApplication()
+        app.launch()
+        tap("entrance.new", in: app)
+        // Wing 1: key, bell, and the flag-gated heart door into wing 2.
+        for room in ["brazier-hall", "sealed-vault", "dust-corridor", "fork", "amber-alcove", "fork", "west-gallery", "bell-niche"] { tap("move.\(room)", in: app) }
+        tap("interact.resonant-bell", in: app)
+        for room in ["west-gallery", "fork", "sentinel-arch", "echo-steps", "stair-landing", "reliquary", "heart-chamber", "ash-threshold", "ink-gallery", "chronicle-aisle"] { tap("move.\(room)", in: app) }
+        tap("discover.lore-ink", in: app)
+        for room in ["quiet-stacks", "tide-landing", "lantern-bridge", "slate-crossing", "underkeep-bridge", "night-gate", "basalt-foyer", "moth-court", "glass-corridor", "ember-walk", "spiral-steps"] { tap("move.\(room)", in: app) }
+        // Cross-wing order-of-operations: the memory door stays sealed until
+        // the wing-3 prism key is carried back to the wing-2 memory seat.
+        XCTAssertFalse(app.buttons["move.star-anteroom"].isEnabled)
+        for room in ["ember-walk", "glass-corridor", "moth-court", "basalt-foyer", "prism-chapel"] { tap("move.\(room)", in: app) }
+        XCTAssertTrue(app.staticTexts["Collected Prism Key"].exists)
+        for room in ["basalt-foyer", "night-gate", "underkeep-bridge", "slate-crossing", "lantern-bridge", "tide-landing", "quiet-stacks", "chronicle-aisle", "memory-seat"] { tap("move.\(room)", in: app) }
+        tap("interact.memory-latch", in: app)
+        for room in ["chronicle-aisle", "quiet-stacks", "tide-landing", "lantern-bridge", "slate-crossing", "underkeep-bridge", "night-gate", "basalt-foyer", "moth-court", "glass-corridor", "ember-walk", "spiral-steps", "star-anteroom"] { tap("move.\(room)", in: app) }
+        // The final aperture needs the wing-3 orry lens as well as the key.
+        tap("move.last-aperture", in: app)
+        XCTAssertFalse(app.buttons["move.dawn-well"].isEnabled)
+        for room in ["star-anteroom", "spiral-steps", "broken-orbit"] { tap("move.\(room)", in: app) }
+        tap("interact.orrery-lens", in: app)
+        for room in ["spiral-steps", "star-anteroom", "last-aperture", "dawn-well"] { tap("move.\(room)", in: app) }
+        tap("discover.lore-dawn", in: app)
+        tap("exploration.finish", in: app)
+        XCTAssertTrue(app.buttons["entrance.new"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["entrance.resume"].exists)
+        XCTAssertTrue(app.staticTexts["run.ending"].label.contains("dawn well"))
+        let sessions = app.staticTexts["epilogue.sessions"]
+        XCTAssertTrue(sessions.waitForExistence(timeout: 5))
+        XCTAssertEqual(sessions.label, "Sessions: 1")
+        XCTAssertTrue(app.staticTexts["epilogue.discoveries"].label.contains("Lore Dawn"))
+    }
 }

@@ -62,9 +62,18 @@ public struct QuestEngine: Sendable {
         contentVersion = definition.contentVersion
     }
 
-    public static func wingOne(tables: RuleTables) throws -> QuestEngine {
-        guard let url = Bundle.module.url(forResource: "quest-v2", withExtension: "json") else {
-            throw QuestError.invalidDefinition("missing quest-v2.json")
+    public static func wingOne(tables: RuleTables) throws -> QuestEngine { try bundled("quest-v2", tables: tables) }
+
+    public static func fullDungeon(tables: RuleTables) throws -> QuestEngine { try bundled("quest-v3", tables: tables) }
+
+    /// Quest text pinned to the run's content version.
+    public static func bundledFor(tables: RuleTables) throws -> QuestEngine {
+        tables.contentVersion >= 3 ? try fullDungeon(tables: tables) : try wingOne(tables: tables)
+    }
+
+    private static func bundled(_ name: String, tables: RuleTables) throws -> QuestEngine {
+        guard let url = Bundle.module.url(forResource: name, withExtension: "json") else {
+            throw QuestError.invalidDefinition("missing \(name).json")
         }
         return try QuestEngine(data: Data(contentsOf: url), tables: tables)
     }

@@ -12,6 +12,7 @@ final class ExplorationModel {
     var tables: RuleTables?
     var quest: QuestEngine?
     var run: StoredRun?
+    var lastRecord: RunRecord?
     var exploring = false
     var paused = false
     var error: String?
@@ -21,25 +22,32 @@ final class ExplorationModel {
 
     func open() {
         perform {
-            let tables = try RuleTables.wingOne()
-            let quest = try QuestEngine.wingOne(tables: tables)
+            let versions = try RuleTables.bundledVersions()
             let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let store = try DelveStore.atPath(directory.appendingPathComponent("delve.sqlite").path)
-            let run = try store.activeRun(tables: tables)
-            self.tables = tables
-            self.quest = quest
+            let matched = try store.activeRun(matching: versions)
+            let fallback = try RuleTables.fullDungeon()
+            let chosen = matched?.tables ?? fallback
+            let chosenQuest = try QuestEngine.bundledFor(tables: chosen)
+            self.tables = chosen
+            self.quest = chosenQuest
             self.store = store
-            self.run = run
+            self.run = matched?.run
         }
     }
 
     func start() {
-        guard let store, let tables else { return }
         perform {
+            guard let store else { return }
+            let tables = try RuleTables.fullDungeon()
+            let quest = try QuestEngine.bundledFor(tables: tables)
             let next = try store.start(tables: tables)
+            self.tables = tables
+            self.quest = quest
             publish(next)
             ending = nil
+            lastRecord = nil
         }
     }
 
@@ -69,7 +77,10 @@ final class ExplorationModel {
         paused = false
         exploring = !next.world.isTerminal
         if next.world.isTerminal {
-            ending = next.world.isDead ? "The patrol ended your delve. Your run is preserved." : "You retreated. Your run is preserved."
+            if let tables { lastRecord = try? RunRecord.derive(from: next.ledger, tables: tables) }
+            ending = next.world.finished ? "You reached the dawn well. The delve is complete."
+                : next.world.isDead ? "The patrol ended your delve. Your run is preserved."
+                : "You retreated. Your run is preserved."
             run = nil
         }
     }
@@ -124,14 +135,15 @@ struct BootstrapHomeView: View {
                     ScrollView {
                         VStack(spacing: 16) {
                             Text("Delve").font(.largeTitle.bold())
-                            Text("Explore the first wing of a fixed dungeon.")
+                            Text("Explore a fixed three-wing dungeon.")
                             if let ending = model.ending { Text(ending).accessibilityIdentifier("run.ending") }
+                            if let record = model.lastRecord { epilogue(record) }
                             control("New delve", id: "entrance.new") { model.start() }
                                 .disabled(model.store == nil)
                             if model.run != nil {
                                 control("Resume delve", id: "entrance.resume") { model.resume() }
                             }
-                            Text("Original geometric placeholder art. Further wings are planned.").font(.footnote)
+                            Text("Original geometric placeholder art.").font(.footnote)
                         }.padding()
                     }.accessibilityIdentifier("entrance")
                 }
@@ -191,6 +203,9 @@ struct BootstrapHomeView: View {
                                     .disabled(found)
                             }
                             control("Retreat to entrance", id: "exploration.retreat") { model.act(.retreat) }
+                            if run.world.currentRoom == tables.goalRoom, tables.contentVersion >= 3 {
+                                control("Finish the delve", id: "exploration.finish") { model.act(.finish) }
+                            }
                         }
                     }
                 } journal: {
@@ -209,6 +224,22 @@ struct BootstrapHomeView: View {
         .buttonStyle(.bordered)
         .accessibilityLabel(label)
         .accessibilityIdentifier(id)
+    }
+
+    private func epilogue(_ record: RunRecord) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Run record").font(.headline)
+            Text("Rooms visited: \(RunRecord.display(record.roomsVisited))")
+            Text("Steps: \(RunRecord.display(record.steps))")
+                .accessibilityIdentifier("epilogue.steps")
+            Text("Sessions: \(RunRecord.display(record.sessions))")
+                .accessibilityIdentifier("epilogue.sessions")
+            switch record.discoveries {
+            case .unknown: Text("Discoveries: unknown").accessibilityIdentifier("epilogue.discoveries")
+            case .known(let ids): Text("Discoveries: \(ids.isEmpty ? "none recorded" : ids.map(title).joined(separator: ", "))")
+                .accessibilityIdentifier("epilogue.discoveries")
+            }
+        }
     }
 
     private func title(_ id: String) -> String { id.replacingOccurrences(of: "-", with: " ").capitalized }
