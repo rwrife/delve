@@ -14,29 +14,39 @@ struct JournalView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                if let error { Text(error).foregroundStyle(.red) }
-                // Tinted-blue NavigationLink labels fall under 4.5:1 contrast;
-                // keep row copy primary while the link still navigates.
-                NavigationLink { notesPage } label: {
-                    Text("Room notes").foregroundStyle(.primary)
-                }
-                .accessibilityIdentifier("journal.notes")
-                NavigationLink { questsPage } label: {
-                    Text("Quest inscriptions").foregroundStyle(.primary)
-                }
-                .accessibilityIdentifier("journal.quests")
-                NavigationLink { recordPage } label: {
-                    Text("Run record").foregroundStyle(.primary)
-                }
-                .accessibilityIdentifier("journal.record")
-                // System toolbar text caps Dynamic Type; keep dismissal in the scalable list.
-                Button { dismiss() } label: {
-                    Text("Done").foregroundStyle(.primary)
-                        .frame(maxWidth: .infinity, minHeight: 56).contentShape(Rectangle())
-                }
-                .buttonStyle(.plain) // Keep the label's primary color instead of List's tinted button style.
-                .accessibilityIdentifier("journal.done")
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if let error { Text(error).foregroundStyle(.red) }
+                    // ponytail: plain rows avoid iOS 26 List's low-contrast system chevron;
+                    // restore List when its contrast audit passes on the pinned runtime.
+                    NavigationLink { notesPage } label: {
+                        Text("Room notes").foregroundStyle(.primary)
+                            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("journal.notes")
+                    NavigationLink { questsPage } label: {
+                        Text("Quest inscriptions").foregroundStyle(.primary)
+                            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("journal.quests")
+                    NavigationLink { recordPage } label: {
+                        Text("Run record").foregroundStyle(.primary)
+                            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("journal.record")
+                    Button { dismiss() } label: {
+                        Text("Done").foregroundStyle(.primary)
+                            .frame(maxWidth: .infinity, minHeight: 56).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("journal.done")
+                }.padding()
             }
             .navigationTitle("Journal")
             .task { reload() }
@@ -44,98 +54,109 @@ struct JournalView: View {
     }
 
     private var notesPage: some View {
-        List {
-            Text("One pinned note per visited room. Notes belong to you, not the dungeon engine.")
-                .font(.body)
-                .fixedSize(horizontal: false, vertical: true)
-            ForEach(run.world.visitedRooms.sorted(), id: \.self) { room in
-                NavigationLink {
-                    RoomNoteEditor(room: room, initial: notes[room] ?? "") { text in
-                        try store.setNote(text, roomID: room, runID: run.id, tables: tables)
-                        reload()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("One pinned note per visited room. Notes belong to you, not the dungeon engine.")
+                    .font(.body)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(run.world.visitedRooms.sorted(), id: \.self) { room in
+                    // Plain rows outside List: iOS 26 List draws a tertiary-tint
+                    // chevron that fails contrast with no attributable element.
+                    NavigationLink {
+                        RoomNoteEditor(room: room, initial: notes[room] ?? "") { text in
+                            try store.setNote(text, roomID: room, runID: run.id, tables: tables)
+                            reload()
+                        }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(title(room)).font(.headline)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text(notes[room] ?? "No note recorded").font(.body)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                        .contentShape(Rectangle())
                     }
-                } label: {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(title(room)).font(.headline)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(notes[room] ?? "No note recorded").font(.body)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("note.room.\(room)")
                 }
-                .accessibilityIdentifier("note.room.\(room)")
-            }
+            }.padding()
         }.navigationTitle("Room notes")
     }
 
     private var questsPage: some View {
-        List {
-            Text("Your checkmarks are theories. Dungeon state is derived separately from recorded events.")
-                .font(.body)
-                .fixedSize(horizontal: false, vertical: true)
-            if let error { Text(error).foregroundStyle(.red) }
-            ForEach(quest.goals, id: \.id) { goal in
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(goal.text).font(.headline)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Button {
-                        let marked = !markedGoals.contains(goal.id)
-                        do {
-                            try store.setGoalMarked(marked, goalID: goal.id, runID: run.id, quest: quest, tables: tables)
-                            reload()
-                        } catch { self.error = "Could not save your mark: \(error.localizedDescription)" }
-                    } label: {
-                        HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: markedGoals.contains(goal.id) ? "checkmark.square" : "square")
-                                .accessibilityHidden(true)
-                            Text(markedGoals.contains(goal.id) ? "Marked by you" : "Not marked by you")
-                                .font(.body)
-                                .fixedSize(horizontal: false, vertical: true)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Your checkmarks are theories. Dungeon state is derived separately from recorded events.")
+                    .font(.body)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let error { Text(error).foregroundStyle(.red) }
+                ForEach(quest.goals, id: \.id) { goal in
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(goal.text).font(.headline)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button {
+                            let marked = !markedGoals.contains(goal.id)
+                            do {
+                                try store.setGoalMarked(marked, goalID: goal.id, runID: run.id, quest: quest, tables: tables)
+                                reload()
+                            } catch { self.error = "Could not save your mark: \(error.localizedDescription)" }
+                        } label: {
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: markedGoals.contains(goal.id) ? "checkmark.square" : "square")
+                                    .accessibilityHidden(true)
+                                Text(markedGoals.contains(goal.id) ? "Marked by you" : "Not marked by you")
+                                    .font(.body)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .foregroundStyle(.primary)
+                            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                            .contentShape(Rectangle())
+                            .accessibilityLabel(markedGoals.contains(goal.id) ? "Marked by you" : "Not marked by you")
                         }
-                        .foregroundStyle(.primary)
-                        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-                        .contentShape(Rectangle())
-                        .accessibilityLabel(markedGoals.contains(goal.id) ? "Marked by you" : "Not marked by you")
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("quest.mark.\(goal.id)")
-                    Text("Dungeon state: \(progress(goal.id))")
-                        .font(.body)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("quest.engine.\(goal.id)")
-                }.padding(.vertical, 8)
-            }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("quest.mark.\(goal.id)")
+                        Text("Dungeon state: \(progress(goal.id))")
+                            .font(.body)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("quest.engine.\(goal.id)")
+                    }.padding(.vertical, 8)
+                }
+            }.padding()
         }.navigationTitle("Quest inscriptions")
     }
 
     private var recordPage: some View {
-        List {
-            Text("Ledger facts. Missing evidence is Unknown, never a guessed zero. Steps include the initial entrance visit.")
-                .font(.body)
-                .fixedSize(horizontal: false, vertical: true)
-            if let record = try? RunRecord.derive(from: run.ledger, tables: tables) {
-                Text("Rooms visited: \(RunRecord.display(record.roomsVisited))")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Ledger facts. Missing evidence is Unknown, never a guessed zero. Steps include the initial entrance visit.")
                     .font(.body)
                     .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("record.rooms")
-                Text("Movement steps: \(RunRecord.display(record.steps))")
-                    .font(.body)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("record.steps")
-                Text("Sessions played: \(RunRecord.display(record.sessions))")
-                    .font(.body)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("record.sessions")
-                Text("Discoveries recorded")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-                switch record.discoveries {
-                case .unknown: Text("Unknown").font(.body).fixedSize(horizontal: false, vertical: true)
-                case .known(let ids):
-                    if ids.isEmpty { Text("None recorded yet").font(.body).fixedSize(horizontal: false, vertical: true) }
-                    ForEach(ids, id: \.self) { Text(title($0)).font(.body).fixedSize(horizontal: false, vertical: true) }
-                }
-            } else { Text("Run record unavailable. No counts inferred.").font(.body).fixedSize(horizontal: false, vertical: true) }
+                if let record = try? RunRecord.derive(from: run.ledger, tables: tables) {
+                    Text("Rooms visited: \(RunRecord.display(record.roomsVisited))")
+                        .font(.body)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("record.rooms")
+                    Text("Movement steps: \(RunRecord.display(record.steps))")
+                        .font(.body)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("record.steps")
+                    Text("Sessions played: \(RunRecord.display(record.sessions))")
+                        .font(.body)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("record.sessions")
+                    Text("Discoveries recorded")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    switch record.discoveries {
+                    case .unknown: Text("Unknown").font(.body).fixedSize(horizontal: false, vertical: true)
+                    case .known(let ids):
+                        if ids.isEmpty { Text("None recorded yet").font(.body).fixedSize(horizontal: false, vertical: true) }
+                        ForEach(ids, id: \.self) { Text(title($0)).font(.body).fixedSize(horizontal: false, vertical: true) }
+                    }
+                } else { Text("Run record unavailable. No counts inferred.").font(.body).fixedSize(horizontal: false, vertical: true) }
+            }.padding()
         }.navigationTitle("Run record")
     }
 
