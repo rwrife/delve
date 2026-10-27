@@ -110,9 +110,9 @@ struct DelveWorkspaceLayout<Dungeon: View, Controls: View, JournalSurface: View>
             dungeon()
             controls()
         }
-        // Opaque sheet prevents underlying room text from bleeding through
-        // the iOS 26 glass backdrop behind journal navigation/list controls.
-        .sheet(isPresented: $journalPresented) {
+        // ponytail: full-screen journal keeps iOS 26's translucent sheet
+        // chrome from lowering row contrast; return to sheet once audited.
+        .fullScreenCover(isPresented: $journalPresented) {
             journal().presentationBackground(Color(uiColor: .systemBackground))
         }
     }
