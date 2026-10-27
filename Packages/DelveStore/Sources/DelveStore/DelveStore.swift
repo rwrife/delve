@@ -10,7 +10,7 @@ import DelveKit
 /// rejects in-place mutation or erasure of ledger rows — history is corrected
 /// by appending compensating events, never by rewriting).
 public enum DelveStoreSchema {
-    public static let migrationIdentifiers = ["v1", "v2", "v3", "v4"]
+    public static let migrationIdentifiers = ["v1", "v2", "v3", "v4", "v5"]
 
     public static let migrator: DatabaseMigrator = {
         var migrator = DatabaseMigrator()
@@ -138,6 +138,9 @@ public enum DelveStoreSchema {
                 WHEN EXISTS(SELECT 1 FROM run_metadata WHERE run_id = NEW.run_id AND terminal = 1)
                 BEGIN SELECT RAISE(ABORT, 'terminal ledger is immutable'); END;
                 """)
+        }
+        migrator.registerMigration("v5") { db in
+            try db.execute(sql: "CREATE TABLE backup_settings (slot INTEGER PRIMARY KEY CHECK(slot=1), json BLOB NOT NULL)")
         }
         return migrator
     }()

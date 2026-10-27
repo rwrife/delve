@@ -100,7 +100,7 @@ extension DelveStore {
               try readRun(run.id, tables: tables, db: db) == run else { throw RunStoreError.staleRun }
     }
 
-    private func readRun(_ id: String, tables: RuleTables, db: Database) throws -> StoredRun {
+    func readRun(_ id: String, tables: RuleTables, db: Database) throws -> StoredRun {
         guard let header = try Data.fetchOne(db, sql: "SELECT ledger_header FROM run_metadata WHERE run_id=?", arguments: [id]) else { throw RunStoreError.missingRun }
         let headerLedger = try JSONDecoder().decode(RunLedger.self, from: header)
         // Verify the persisted content identity before rebuilding with these tables.
@@ -120,7 +120,7 @@ extension DelveStore {
         return StoredRun(id: id, ledger: ledger, world: try ledger.world(tables: tables))
     }
 
-    private func insert(_ entries: [RunLedger.Entry], id: String, db: Database) throws {
+    func insert(_ entries: [RunLedger.Entry], id: String, db: Database) throws {
         for entry in entries {
             try db.execute(sql: "INSERT INTO ledger_events(run_id,kind,detail_json,occurred_at) VALUES (?,?,?,?)", arguments: [id, eventKind(entry.event), String(decoding: try EventCodec.canonical(entry.event), as: UTF8.self), Date().timeIntervalSince1970])
         }
@@ -134,7 +134,7 @@ extension DelveStore {
         }
     }
 
-    private func eventKind(_ event: GameEvent) -> String {
+    func eventKind(_ event: GameEvent) -> String {
         switch event {
         case .visit: "visit"
         case .action: "action"

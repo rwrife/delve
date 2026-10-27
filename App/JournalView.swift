@@ -48,6 +48,7 @@ struct JournalView: View {
                     .accessibilityIdentifier("journal.done")
                 }.padding()
             }
+            .background(Color(uiColor: .systemBackground))
             .navigationTitle("Journal")
             .task { reload() }
         }

@@ -16,6 +16,12 @@ final class DelveLaunchTests: XCTestCase {
         XCTAssertTrue(button.waitForExistence(timeout: 5), id)
         XCTAssertTrue(button.isHittable, id)
         button.tap()
+        // Simulator retains app data across tests. Starting over an active run
+        // now requires the user's explicit confirmation; don't leak run state.
+        if id == "entrance.new" {
+            let confirm = app.buttons["Start new delve"]
+            if confirm.waitForExistence(timeout: 2) { confirm.tap() }
+        }
     }
 
     @MainActor
@@ -28,6 +34,8 @@ final class DelveLaunchTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(newRun.frame.height, 56)
         XCTAssertEqual(newRun.label, "New delve")
         newRun.tap()
+        let confirm = app.buttons["Start new delve"]
+        if confirm.waitForExistence(timeout: 2) { confirm.tap() }
         let pause = app.buttons["exploration.pause"]
         XCTAssertTrue(pause.waitForExistence(timeout: 5))
         XCTAssertGreaterThanOrEqual(pause.frame.height, 56)

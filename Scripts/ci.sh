@@ -129,6 +129,10 @@ xcodebuild build \
   CODE_SIGNING_REQUIRED=NO \
   2>&1 | tee "$artifact_dir/xcodebuild-build.log"
 
+phase="compiled_icon_guard"
+python3 Scripts/verify_app.py "$derived_data/Build/Products/Debug-iphonesimulator/Delve.app" \
+  2>&1 | tee "$artifact_dir/compiled-icon.log"
+
 phase="device_family_guard"
 app_plist="$derived_data/Build/Products/Debug-iphonesimulator/Delve.app/Info.plist"
 if [[ ! -f "$app_plist" ]]; then

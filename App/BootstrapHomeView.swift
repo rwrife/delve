@@ -110,9 +110,9 @@ struct DelveWorkspaceLayout<Dungeon: View, Controls: View, JournalSurface: View>
             dungeon()
             controls()
         }
-        // Opaque sheet prevents underlying room text from bleeding through
-        // the iOS 26 glass backdrop behind journal navigation/list controls.
-        .sheet(isPresented: $journalPresented) {
+        // ponytail: full-screen journal keeps iOS 26's translucent sheet
+        // chrome from lowering row contrast; return to sheet once audited.
+        .fullScreenCover(isPresented: $journalPresented) {
             journal().presentationBackground(Color(uiColor: .systemBackground))
         }
     }
@@ -120,6 +120,8 @@ struct DelveWorkspaceLayout<Dungeon: View, Controls: View, JournalSurface: View>
 
 struct BootstrapHomeView: View {
     @State private var model = ExplorationModel()
+    @State private var dataPresented = false
+    @State private var newRunConfirmation = false
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -138,7 +140,14 @@ struct BootstrapHomeView: View {
                             Text("Explore a fixed three-wing dungeon.")
                             if let ending = model.ending { Text(ending).accessibilityIdentifier("run.ending") }
                             if let record = model.lastRecord { epilogue(record) }
-                            control("New delve", id: "entrance.new") { model.start() }
+                            control("New delve", id: "entrance.new") {
+                                do {
+                                    if model.run != nil, let store = model.store,
+                                       try store.backup(versions: RuleTables.bundledVersions()).settings.confirmNewRun {
+                                        newRunConfirmation = true
+                                    } else { model.start() }
+                                } catch { model.error = error.localizedDescription }
+                            }
                                 .disabled(model.store == nil)
                             if model.run != nil {
                                 control("Resume delve", id: "entrance.resume") { model.resume() }
@@ -150,6 +159,23 @@ struct BootstrapHomeView: View {
             }
             .padding()
             .navigationTitle(model.exploring ? "Exploration" : "Entrance")
+            .toolbar {
+                Button("Your data") { dataPresented = true }
+                    .disabled(model.store == nil)
+                    .accessibilityIdentifier("data.open")
+            }
+            .sheet(isPresented: $dataPresented) {
+                if let store = model.store {
+                    DataOwnershipView(store: store) {
+                        model.exploring = false; model.paused = false
+                        model.lastRecord = nil; model.ending = nil
+                        model.open()
+                    }
+                }
+            }
+            .confirmationDialog("Start a new delve? Your previous run stays in the backup history.", isPresented: $newRunConfirmation, titleVisibility: .visible) {
+                Button("Start new delve") { model.start() }
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {

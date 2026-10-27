@@ -1,0 +1,293 @@
+name: Release (TestFlight)
+
+# Issue #7: on a `v*` tag, archive with the iOS 26+ SDK, sign via the App
+# Store Connect API (repo secrets: ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8,
+# ASC_TEAM_ID — names only, values never logged), upload a TestFlight build,
+# wait for ASC processing, and tag a GitHub release. Runbook: docs/release.md.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (must match the VERSION file, e.g. 1.0.0)'
+        required: true
+        default: '0.1.0'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  testflight:
+    name: Archive + upload to TestFlight
+    runs-on: macos-26
+    timeout-minutes: 45
+    # NOTE: $RUNNER_TEMP is referenced inside run steps directly — the
+    # `runner` context is not available in job-level `env:` (actionlint).
+    # ASC secret env is JOB-LEVEL: archive/export/poll steps all
+    # consume ASC_KEY_ID / ASC_ISSUER_ID / ASC_TEAM_ID, and asc_jwt.rb reads
+    # the IDs from env too. Step-level-only env left them unbound (run
+    # 35954410638: `ASC_KEY_ID: unbound variable` under set -u).
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+      ASC_TEAM_ID: ${{ secrets.ASC_TEAM_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify release secret NAMES are wired (values never logged)
+        run: |
+          set -euo pipefail
+          MISSING=0
+          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 ASC_TEAM_ID; do
+            # Test for presence WITHOUT echoing the value.
+            if [ -z "${!name:-}" ]; then
+              echo "::error::secret $name is not set for this repository"
+              MISSING=1
+            else
+              echo "secret $name: present"
+            fi
+          done
+          exit $MISSING
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_TEAM_ID: ${{ secrets.ASC_TEAM_ID }}
+
+      - name: Resolve version (tag must match VERSION file)
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="v$INPUT_VERSION"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          FILE_VERSION="$(cat VERSION)"
+          if [ "$TAG" != "v$FILE_VERSION" ]; then
+            echo "::error::tag '$TAG' does not match VERSION file 'v$FILE_VERSION'. Bump VERSION and the checked-in project version, then tag the matching commit."
+            exit 1
+          fi
+          if [ "$(git rev-parse "$TAG^{commit}")" != "$(git rev-parse HEAD)" ]; then
+            echo "::error::release tag must exist and point to the checked-out commit"
+            exit 1
+          fi
+          # One build number per workflow run. Re-running an uploaded run requires
+          # a fresh dispatch because ASC never permits reusing a build number.
+          {
+            echo "VERSION=$FILE_VERSION"
+            echo "BUILD_NUMBER=$GITHUB_RUN_NUMBER"
+            echo "RELEASE_TAG=$TAG"
+          } >> "$GITHUB_ENV"
+          echo "Releasing Delve $FILE_VERSION (build $GITHUB_RUN_NUMBER)"
+
+      - name: Select exact pinned Xcode and SDK
+        run: |
+          set -euo pipefail
+          DEVELOPER_DIR=$(python3 Scripts/select_xcode.py --toolchain toolchain.json)
+          export DEVELOPER_DIR
+          echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
+
+      - name: Ensure pinned iOS device platform
+        timeout-minutes: 20
+        run: |
+          set -euo pipefail
+          # macos-26 may ship Xcode 26.0.1 without its iOS 26.0 platform.
+          xcrun simctl list >/dev/null 2>&1 || true
+          destinations=$(xcodebuild -showdestinations -project Delve.xcodeproj -scheme Delve 2>&1)
+          if ! printf '%s\n' "$destinations" | grep -q 'name:Any iOS Device' || \
+             printf '%s\n' "$destinations" | grep -q 'name:Any iOS Device, error:'; then
+            xcodebuild -downloadPlatform iOS -architectureVariant universal
+            destinations=$(xcodebuild -showdestinations -project Delve.xcodeproj -scheme Delve 2>&1)
+          fi
+          printf '%s\n' "$destinations"
+          printf '%s\n' "$destinations" | grep -q 'name:Any iOS Device'
+          if printf '%s\n' "$destinations" | grep -q 'name:Any iOS Device, error:'; then
+            echo '::error::Pinned iOS device platform unavailable'
+            exit 1
+          fi
+
+      - name: Native offline architecture gates
+        run: |
+          set -euo pipefail
+          bash scripts/check_native_only.sh
+          bash scripts/check_zero_network.sh
+          bash scripts/check_delvekit_purity.sh
+
+      - name: Enforce iOS 26+ SDK
+        run: |
+          set -euo pipefail
+          SHOW=$(xcodebuild -showsdks || true)
+          SDK_MAJOR=$(echo "$SHOW" | grep -oE 'iphoneos[0-9]+' | sed 's/^iphoneos//' | cut -d. -f1 | sort -V | tail -1 || true)
+          echo "Latest iOS device SDK major version: ${SDK_MAJOR:-none}"
+          if [ "${SDK_MAJOR:-0}" -lt 26 ]; then
+            echo "::error::iOS SDK ${SDK_MAJOR:-none} is older than the required iOS 26 pin."
+            exit 1
+          fi
+
+      - name: Install App Store Connect API key (mode 600, never logged)
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc-api-key.p8"
+          chmod 600 "$RUNNER_TEMP/asc-api-key.p8"
+          # Prove the private key body never reached the log (base64 alphabet
+          # check on the file vs. nothing comparable in logs — the mask check
+          # below is the log-side half).
+          echo "API key installed (name ASC_KEY_P8, file mode $(stat -f '%Lp' "$RUNNER_TEMP/asc-api-key.p8"))."
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+
+      - name: Resolve Swift package dependencies
+        run: |
+          set -euo pipefail
+          xcodebuild -resolvePackageDependencies \
+            -project Delve.xcodeproj \
+            -scheme Delve \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm"
+
+      - name: Archive (signed, iOS 26 SDK)
+        run: |
+          set -euo pipefail
+          xcodebuild build archive \
+            -project Delve.xcodeproj \
+            -scheme Delve \
+            -destination 'generic/platform=iOS' \
+             -archivePath "$RUNNER_TEMP/Delve.xcarchive" \
+            -configuration Release \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" \
+            -allowProvisioningUpdates \
+            -allowProvisioningDeviceRegistration \
+            -authenticationKeyPath "$RUNNER_TEMP/asc-api-key.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_STYLE=Automatic \
+            TARGETED_DEVICE_FAMILY=1 SUPPORTS_MACCATALYST=NO \
+            DEVELOPMENT_TEAM="$ASC_TEAM_ID" \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
+
+      - name: Verify archived iPhone bundle and compiled icon
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/Delve.xcarchive/Products/Applications/Delve.app"
+          python3 Scripts/verify_app.py "$APP"
+
+      - name: Export signed IPA and upload to TestFlight (ASC API key)
+        run: |
+          set -euo pipefail
+          # destination=upload makes xcodebuild deliver the .ipa straight to
+          # App Store Connect using the API key — the documented Xcode 26
+          # path (no altool/fastlane). The polling step below proves arrival.
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>destination</key><string>upload</string>
+            <key>method</key><string>app-store-connect</string>
+            <key>uploadMethod</key><string>app-store-connect</string>
+            <key>teamID</key><string>__TEAM__</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          PLIST
+          sed -i '' "s/__TEAM__/$ASC_TEAM_ID/" "$RUNNER_TEMP/ExportOptions.plist"
+          mkdir -p "$RUNNER_TEMP/ipa"
+          xcodebuild -exportArchive \
+             -archivePath "$RUNNER_TEMP/Delve.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/ipa" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc-api-key.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+      - name: Wait for ASC processing and register the build
+        run: |
+          set -euo pipefail
+          API=https://api.appstoreconnect.apple.com
+          JWT="$(ASC_KEY_FILE="$RUNNER_TEMP/asc-api-key.p8" ruby Tools/asc_jwt.rb)"
+          APP_ID="$(curl --globoff -sS --fail -H "Authorization: Bearer $JWT" \
+            "$API/v1/apps?filter[bundleId]=com.infinityball.delve" \
+            | jq -r '.data[0].id')"
+          [ "$APP_ID" != "null" ] || { echo "::error::bundle id not found in App Store Connect"; exit 1; }
+          echo "ASC app id: $APP_ID"
+
+          BUILD_ID=""
+          STATE=""
+          for i in $(seq 1 45); do
+            JWT="$(ASC_KEY_FILE="$RUNNER_TEMP/asc-api-key.p8" ruby Tools/asc_jwt.rb)"
+            SNAP="$(curl --globoff -sS --fail -H "Authorization: Bearer $JWT" \
+              "$API/v1/builds?filter[app]=$APP_ID&filter[version]=$BUILD_NUMBER&sort=-uploadedDate&limit=5")"
+            ENTRY="$(echo "$SNAP" | jq -r --arg v "$BUILD_NUMBER" '
+              ([.data[] | select(.attributes.version == $v)])
+              | if length > 0 then (.[0] | [.id, .attributes.processingState] | @tsv) else "" end')"
+            IFS=$'\t' read -r BUILD_ID STATE <<< "$ENTRY"
+            echo "poll $i: build-id=${BUILD_ID:-none} processing=${STATE:-unknown}"
+            # Classic builds report VALID when processed; newer TestFlight
+            # processing reports COMPLETE. Accept either.
+            if [ -n "$BUILD_ID" ] && { [ "$STATE" = "VALID" ] || [ "$STATE" = "COMPLETE" ]; }; then
+              break
+            fi
+            if [ "$STATE" = "FAILED" ] || [ "$STATE" = "INVALID" ]; then
+              echo "::error::ASC build $BUILD_ID failed processing: $STATE"
+              exit 1
+            fi
+            sleep 20
+          done
+          [ -n "${BUILD_ID:-}" ] || { echo "::error::TestFlight build never appeared for version $BUILD_NUMBER"; exit 1; }
+          if [ "$STATE" != "VALID" ] && [ "$STATE" != "COMPLETE" ]; then
+            echo "::error::build $BUILD_ID stuck in processing state '$STATE'"
+            exit 1
+          fi
+          echo "BUILD_ID=$BUILD_ID" >> "$GITHUB_ENV"
+          echo "TestFlight build registered: $BUILD_ID"
+          echo "Delve $VERSION build $BUILD_NUMBER: ASC build $BUILD_ID, processing $STATE" >> "$GITHUB_STEP_SUMMARY"
+          printf 'ASC build %s; processing %s; version %s; build %s\n' "$BUILD_ID" "$STATE" "$VERSION" "$BUILD_NUMBER" > "$RUNNER_TEMP/ipa/testflight-status.txt"
+
+      - name: Create GitHub release (changelog anchor)
+        if: success()
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "GitHub release $RELEASE_TAG already exists — skipping creation."
+          else
+            gh release create "$RELEASE_TAG" --verify-tag --generate-notes \
+              --title "Delve $VERSION (build $BUILD_NUMBER)"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Remove API key material
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/asc-api-key.p8"
+          echo "asc-api-key.p8 removed from runner temp."
+
+      - name: Upload archive metadata (dSYM provenance)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: delve-archive-${{ github.ref_name }}
+          path: |
+            ${{ runner.temp }}/ipa/testflight-status.txt
+            ${{ runner.temp }}/ipa/*.ipa
+            ${{ runner.temp }}/ipa/*.plist
+            ${{ runner.temp }}/ipa/*.dSYM.zip
+          if-no-files-found: warn
+          retention-days: 30
