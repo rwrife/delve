@@ -1,6 +1,6 @@
 # Delve
 
-**An offline iPhone fixed-dungeon puzzle crawler. The current slice explores all three wings (45 rooms), with a clue journal and an epilogue run record; backup/export and release features below are planned.**
+**An offline iPhone fixed-dungeon puzzle crawler. The current slice explores all three wings (45 rooms), with a clue journal, an epilogue run record, JSON backup/restore, and CSV export. The release workflow is implemented; native build and TestFlight verification remain pending.**
 
 ## Product direction
 
@@ -58,8 +58,8 @@ Most mobile "dungeon" games are procedural roguelites or gacha loot grinders —
 ## Privacy, permissions, and data storage
 
 - 100% offline. The app uses no network and requests no permissions.
-- Implemented run state and ledger records live in a local GRDB/SQLite store inside the app container. The implemented app has no export path; Files-app exports are planned.
-- Planned exports are JSON/CSV with previewed restore.
+- Implemented run state and ledger records live in a local GRDB/SQLite store inside the app container. The Your data screen exports JSON backups and journal/quest CSV through ShareLink or Files.
+- JSON restore previews changes and requires explicit confirmation; replacement is atomic and rejects stale previews. Archive v1 migrates to v2 defaults; unknown versions fail safely.
 - No identifiers, telemetry, or ad SDKs — CI enforces an empty network allowlist.
 
 ## iPhone Duo dual-screen design target
@@ -69,7 +69,7 @@ Today: standard iPhone app, iPad support disabled (`TARGETED_DEVICE_FAMILY = 1`,
 ## Bundle ID & App Store Connect
 
 - Bundle identifier: `com.infinityball.delve` (matches `PRODUCT_BUNDLE_IDENTIFIER`, App Store Connect registered: `CREATED com.infinityball.delve`).
-- Planned release path (not implemented): TestFlight via GitHub Actions using the repository secrets `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `ASC_TEAM_ID` (names only — values never logged), ported from the proven fleet template (rwrife/cook-console `release.yml`): `v*` tag or manual dispatch → macos-26 job → iOS 26+ SDK enforcement → signed IPA archive → TestFlight upload via the App Store Connect API → GitHub release.
+- Implemented release workflow (not yet executed for this worktree): TestFlight via GitHub Actions using the repository secrets `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `ASC_TEAM_ID` (names only — values never logged), ported from the proven fleet template (rwrife/cook-console `release.yml`): `v*` tag or manual dispatch → macos-26 job → iOS 26+ SDK enforcement → signed IPA archive → TestFlight upload via the App Store Connect API → GitHub release.
 
 ## Current status and milestones
 
@@ -77,7 +77,7 @@ Implemented in the worktree: the deterministic DelveKit engine and validated 15-
 
 DelveStore v2 adds content-pinned replay, atomic event/snapshot writes, an active-run pointer, and immutable terminal history. Every accepted action is saved before visible world state changes; backgrounding saves and pauses. Actual engine patrol contact records death atomically with movement and returns to the entrance, as does retreat. New starts preserve earlier runs and only replace the active pointer after a successful transaction. Legacy v1 fixture rows remain intact but are not offered as resumable runs because they lack canonical replay metadata.
 
-Backup/export, cosmetic hero naming, icon, release workflow, and dual-screen integration are planned. The migration contract is in `docs/dual-screen-migration.md`. Linux package tests and local source gates can run here; native compilation, simulator journeys, VoiceOver behavior, and device accessibility still require the pinned macOS CI/device validation. No native result is claimed from this Linux worktree.
+Backup/export, the generated icon, and the release workflow are implemented. Cosmetic hero naming and dual-screen integration remain planned. See [issue #7 validation](docs/issue-7-validation.md) for tests and the explicit native/TestFlight blocker, and [the release runbook](docs/release.md) for the pipeline contract. The migration contract is in `docs/dual-screen-migration.md`. Linux package tests and local source gates can run here; native compilation, simulator journeys, VoiceOver behavior, and device accessibility still require the pinned macOS CI/device validation. No native result is claimed from this Linux worktree.
 
 ## Development / build quickstart
 
