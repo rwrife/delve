@@ -16,5 +16,5 @@
   "schema": "tool-lab/toolchain/v1",
   "platform": "ios",
   "device_family": "iphone-only",
-  "notes": "Native iPhone-only puzzle crawler. CI must assert TARGETED_DEVICE_FAMILY=1 and verify the exact bundle identifier and iOS 26+ SDK contract. Dungeon exploration and room scenes use SpriteKit; shell UI (quest journal, clue notes, menus) uses SwiftUI; puzzle/dungeon logic lives in the pure-Swift DelveKit package. Zero network."
+  "notes": "Legacy native iPhone-only app toolchain. Native CI asserts TARGETED_DEVICE_FAMILY=1, the bundle identifier, and the iOS 26+ SDK contract. The playable Godot port is configured separately in project.godot. Both implementations are offline."
 }

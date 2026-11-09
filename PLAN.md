@@ -1,5 +1,10 @@
 # Delve — PLAN
 
+This is the historical plan for the original SwiftUI/SpriteKit implementation.
+The playable Godot port and its Windows quickstart are documented in
+`README.md`; the retained native project and its toolchain remain available
+as a reference.
+
 ## Scope
 
 A single-player, offline, fixed-dungeon puzzle-crawler game for iPhone (native Swift). One handcrafted dungeon with deterministic room state, a vague layered quest whose progress is derived only from an append-only event ledger, order-of-operations puzzles requiring deliberate backtracking, and a user-owned clue journal. iPhone Duo dual-screen is a documented design target behind a single layout seam; no fold-SDK dependency. Zero network.

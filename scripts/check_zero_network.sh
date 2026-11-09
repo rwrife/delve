@@ -7,9 +7,9 @@
 # stays empty in toolchain.json ("network_allowlist": []); extending it
 # requires explicit user sign-off in a scope PR.
 #
-# Scanned roots: App/ and UITests/ (app sources + resources) and
-# Packages/* sources. SwiftPM .build directories are skipped so vendored
-# checkouts (GRDB) never trip the first-party scan.
+# Scanned roots: App/ and UITests/ (app sources + resources), Packages/*
+# sources, and the Godot game's GDScript. SwiftPM .build directories are
+# skipped so vendored checkouts (GRDB) never trip the first-party scan.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -49,6 +49,30 @@ for root in "${ROOTS[@]}"; do
       "$pat" "$root" 2>/dev/null || true)
     [ -n "$hits" ] && matches+="$hits"$'\n'
   done
+done
+
+# Godot signal connect/bind methods are not network operations, so scan its
+# source for the networking classes rather than the Swift/C function patterns.
+GODOT_PATTERNS=(
+  '\bHTTPRequest\b'
+  '\bHTTPClient\b'
+  '\bTCPServer\b'
+  '\bStreamPeerTCP\b'
+  '\bStreamPeerTLS\b'
+  '\bPacketPeerUDP\b'
+  '\bUDPServer\b'
+  '\bWebSocketPeer\b'
+  '\bWebSocketMultiplayerPeer\b'
+  '\bENetMultiplayerPeer\b'
+  '\bWebRTCPeerConnection\b'
+  '\bWebRTCMultiplayerPeer\b'
+  '\bMultiplayerAPI\b'
+  '\bMultiplayerPeer\b'
+  '\bIP\.resolve_hostname'
+)
+for pat in "${GODOT_PATTERNS[@]}"; do
+  hits=$(grep -RnE --include='*.gd' "$pat" godot 2>/dev/null || true)
+  [ -n "$hits" ] && matches+="$hits"$'\n'
 done
 
 # Filter allowlisted lines (exact substring match against allowlist entries)

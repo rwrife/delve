@@ -13,6 +13,10 @@ xcuserdata/
 .swiftpm/
 Package.resolved.lock
 
+# Godot
+.godot/
+AppStore/*.png.import
+
 # Local tooling and credentials
 .env
 *.p8
