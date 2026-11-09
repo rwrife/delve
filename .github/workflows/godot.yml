@@ -1,0 +1,39 @@
+name: Godot game
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  godot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Download verified Godot 4.4.1
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          curl --fail --location --retry 3 --output godot.zip \
+            https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip
+          echo 'ef4e76880a514257175544952c61191106fdef3095b909bafed9fcbeb230c3e5533920a0f3012882dd4bbde83028a67549825794e2d2c3cf76eba7918b71370e  godot.zip' | sha512sum --check
+          unzip -q godot.zip
+          mv Godot_v4.4.1-stable_linux.x86_64 godot
+          chmod +x godot
+      - name: Import and test game
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/godot" --headless --editor --path . --quit
+          "$RUNNER_TEMP/godot" --headless --path . --script res://godot/tests/test_game.gd
+          "$RUNNER_TEMP/godot" --headless --path . --script res://godot/tests/test_ui.gd
+          bash scripts/check_zero_network.sh
+      - name: Test packaged resources without the source tree
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/godot" --headless --path . --export-pack 'Windows Desktop' "$RUNNER_TEMP/delve.pck"
+          mkdir "$RUNNER_TEMP/delve-empty"
+          cd "$RUNNER_TEMP/delve-empty"
+          "$RUNNER_TEMP/godot" --headless --path . --main-pack "$RUNNER_TEMP/delve.pck" --script res://godot/tests/test_game.gd

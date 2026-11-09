@@ -1,10 +1,22 @@
 # Delve
 
-**An offline iPhone fixed-dungeon puzzle crawler. The current slice explores all three wings (45 rooms), with a clue journal, an epilogue run record, JSON backup/restore, and CSV export. The release workflow is implemented; native build and TestFlight verification remain pending.**
+**An offline fixed-dungeon puzzle crawler, now playable on Windows with Godot 4.4.1. Explore all three wings (45 rooms), keep a clue journal, and export or restore your saves. The original native iPhone project is retained as a reference.**
+
+## Run the Godot game
+
+1. Install [Godot 4.4.1](https://godotengine.org/download/archive/4.4.1-stable/) (the standard, non-.NET build).
+2. In the Godot Project Manager, **Import** this repository's `project.godot`, open the project, and press **F5** to play. Alternatively, run `godot --path .` from the repository root.
+3. Choose **New delve** or **Resume delve**. Use the on-screen buttons or keys **1–9** for exits, **J** for the journal, and **P** or **Esc** to pause.
+
+Each accepted action is saved locally. On Windows, the Godot save is in `%APPDATA%\Godot\app_userdata\Delve\delve.json`; it is separate from the original iPhone app's SQLite database. **Your data** exports JSON backups and journal CSV, and previews changes before replacing local data. The JSON archive uses the native app's versioned ledger format; transfer from the iPhone app requires exporting a JSON backup there first. Cross-app restore has not yet been verified on an iPhone.
+
+If an interrupted write leaves a `delve.json.lock` directory, close any other running copy of Delve before removing that directory and retrying. Do not remove the save itself.
+
+Godot's Windows Desktop export preset includes the original dungeon JSON; install Godot export templates before exporting an executable. The Godot port's iOS export, device accessibility, and TestFlight release have not been verified.
 
 ## Product direction
 
-Delve is a single-player adventure game about one fixed, handcrafted dungeon. There is no procedural generation and no loot treadmill: the tomb is a puzzle space. The quest UI presents the cryptic quest data without spelling out the route; some challenges only open in a certain order, so the real gameplay loop is *explore → observe → hypothesize → backtrack → try the other route first*. A dual-screen battle-style layout (dungeon view on one surface, persistent quest/clue journal as the companion surface) is the iPhone Duo design target, targeted through a workspace-layout seam; persistent dual-screen journal integration is planned.
+Delve is a single-player adventure game about one fixed, handcrafted dungeon. There is no procedural generation and no loot treadmill: the tomb is a puzzle space. The quest UI presents the cryptic quest data without spelling out the route; some challenges only open in a certain order, so the real gameplay loop is *explore → observe → hypothesize → backtrack → try the other route first*. The Godot game presents the journal as a separate screen; the retained native project contains the earlier iPhone Duo layout seam.
 
 ## Motivation
 
@@ -25,13 +37,13 @@ Most mobile "dungeon" games are procedural roguelites or gacha loot grinders —
 
 ## How to use (intended end-to-end workflow)
 
-1. Start a new delve from the entrance screen; pick a hero name (purely cosmetic, stored locally).
+1. Start a new delve from the entrance screen.
 2. Explore the fixed map room-by-room with one-thumb movement controls; every room layout is deterministic — nothing reshuffles between visits.
 3. Read the vague quest text; goals show only `unknown / in-progress / achieved` states derived from your actual event ledger, never from hidden hints.
-4. Keep the clue journal open as a companion sheet (today) / companion screen (iPhone Duo design target): free-text notes pinned to rooms, quest-goal checkmarks you own.
-5. Die or retreat — progress that matters (visited rooms, flags, notes, achieved goals) persists; the run state machine is append-only and resumable.
+4. Open the clue journal: keep free-text notes pinned to rooms and quest-goal checkmarks you own.
+5. Pause and resume an active run, or die or retreat — completed run history and journal entries remain in backups.
 6. Finish the delve → epilogue screen with your personal run record (steps, sessions, discoveries) derived honestly from the ledger.
-7. Back up via Files-app JSON export; restore with previewed replace.
+7. Export a JSON backup or CSV journal; restore a backup with a previewed replace.
 
 ## Planned full MVP feature list
 
@@ -43,14 +55,14 @@ Most mobile "dungeon" games are procedural roguelites or gacha loot grinders —
 - One-thumb exploration controls, large touch targets, pause-anywhere, session auto-save.
 - Append-only run ledger; resume-after-quit; personal run record with unknown-safe derivation (never counted as zero).
 - Versioned JSON backup with previewed restore; CSV journal/quest export.
-- Accessibility: Dynamic Type on all journal/menu text, VoiceOver labels on controls, colorblind-safe state glyphs, haptics-optional.
+- Accessibility: labeled controls and keyboard navigation on desktop; device screen-reader and mobile accessibility validation remain outstanding for the Godot port.
 
 ## Explicit non-goals
 
 - No procedural generation, no daily-challenge servers, no leaderboards.
 - No accounts, cloud sync, analytics, ads, IAP, loot boxes, or energy timers. **Zero network — enforced by CI contract gate.**
-- No Flutter, React Native, Expo, Kotlin Multiplatform, .NET MAUI, or Unity; no other cross-platform/hybrid framework. Native Swift (SwiftUI + SpriteKit) only.
-- No Android target and no native iPad support (iPhone-only; iPad requires explicit user opt-in).
+- Godot 4 is the game runtime; the original SwiftUI/SpriteKit app is retained separately. No Flutter, React Native, Expo, Kotlin Multiplatform, .NET MAUI, or Unity.
+- No Android target. The legacy native app is iPhone-only; Godot mobile exports are not yet configured or validated.
 - No franchise names, characters, or assets from HeroQuest, Gauntlet, or any other property — original IP only.
 - No multiplayer, no AI-generated voice, no camera/microphone permissions.
 - Not a game engine, level editor, or mod platform (a future seedable custom-room export is out of MVP scope).
@@ -58,11 +70,11 @@ Most mobile "dungeon" games are procedural roguelites or gacha loot grinders —
 ## Privacy, permissions, and data storage
 
 - 100% offline. The app uses no network and requests no permissions.
-- Implemented run state and ledger records live in a local GRDB/SQLite store inside the app container. The Your data screen exports JSON backups and journal/quest CSV through ShareLink or Files.
+- The Godot game stores versioned run ledgers and journal entries in a local JSON save, writing a replacement before publishing each change. The retained native app uses GRDB/SQLite. Each has a Your data screen for JSON backup and journal/quest CSV export.
 - JSON restore previews changes and requires explicit confirmation; replacement is atomic and rejects stale previews. Archive v1 migrates to v2 defaults; unknown versions fail safely.
 - No identifiers, telemetry, or ad SDKs — CI enforces an empty network allowlist.
 
-## iPhone Duo dual-screen design target
+## Legacy iPhone Duo dual-screen design target
 
 Today: standard iPhone app, iPad support disabled (`TARGETED_DEVICE_FAMILY = 1`, built `UIDeviceFamily == [1]`). The dungeon view and native exploration controls compose through `DelveWorkspaceLayout`; the clue/quest journal is implemented as a sheet routed through that same seam (issue #5); the full contract is `docs/dual-screen-migration.md`. When dual-screen SDK support matures, the migration path is to bind that seam to the second display — dungeon on the primary surface, persistent journal/quest control surface on the companion — with selection/scroll continuity across fold/unfold. No current code depends on unavailable fold APIs.
 
@@ -73,17 +85,17 @@ Today: standard iPhone app, iPad support disabled (`TARGETED_DEVICE_FAMILY = 1`,
 
 ## Current status and milestones
 
-Implemented in the worktree: the deterministic DelveKit engine and validated 15-room wing one; ledger-derived quest APIs; SwiftUI entrance, new delve/resume, room movement, puzzle toggles, discoveries, automatic key pickup, pause, retreat, and the issue #5 clue journal with per-room notes, quest theories, and ledger run records; a SpriteKit scene using clearly labeled original geometric placeholder art. Native controls have at least 56-point targets, Dynamic Type HUD text, VoiceOver labels, and text/glyph state indicators. `DelveWorkspaceLayout` composes the scene and controls and presents the journal sheet.
+The Godot project reuses the versioned dungeon and quest files from DelveKit. It implements deterministic movement, keys and locks, location-bound switches, patrol deaths, discoveries, ordered quest evidence, notes, player marks, pause/resume, terminal run records, and backup/restore. Room scenes use original geometric placeholder art. Godot desktop gameplay is separate from the retained native implementation.
 
-DelveStore v2 adds content-pinned replay, atomic event/snapshot writes, an active-run pointer, and immutable terminal history. Every accepted action is saved before visible world state changes; backgrounding saves and pauses. Actual engine patrol contact records death atomically with movement and returns to the entrance, as does retreat. New starts preserve earlier runs and only replace the active pointer after a successful transaction. Legacy v1 fixture rows remain intact but are not offered as resumable runs because they lack canonical replay metadata.
+Both implementations pin runs to a content version and fingerprint. The Godot game replays its saved ledger, writes accepted events before updating the display, and records patrol contact and death together. Starting a new run preserves the previous run in backup history.
 
-Backup/export, the generated icon, and the release workflow are implemented. Cosmetic hero naming and dual-screen integration remain planned. See [issue #7 validation](docs/issue-7-validation.md) for tests and the explicit native/TestFlight blocker, and [the release runbook](docs/release.md) for the pipeline contract. The migration contract is in `docs/dual-screen-migration.md`. Linux package tests and local source gates can run here; native compilation, simulator journeys, VoiceOver behavior, and device accessibility still require the pinned macOS CI/device validation. No native result is claimed from this Linux worktree.
+The legacy iPhone app, icon, and release workflow remain in the repository. See [issue #7 validation](docs/issue-7-validation.md) and [the release runbook](docs/release.md) for their native/TestFlight limitations, and [the migration contract](docs/dual-screen-migration.md) for the earlier dual-screen design.
 
 ## Development / build quickstart
 
-- Xcode 26.0.1 (17A400), iOS SDK 26.0, Swift 6 mode (see `toolchain.json`; enforced by native CI).
-- App shell: SwiftUI; scenes: SpriteKit (from issue #4); pure game domain in `Packages/DelveKit` (Linux-testable), store in `Packages/DelveStore` (GRDB, needs libsqlite3 on Linux).
-- Package tests on Linux/macOS: `swift test --package-path Packages/DelveKit && swift test --package-path Packages/DelveStore`.
-- Gates: `bash scripts/check_zero_network.sh`, `scripts/check_native_only.sh`, `scripts/check_delvekit_purity.sh`; full simulator validation via `Scripts/ci.sh <sha>` (macOS only).
-- Regenerate the store fixture: `python3 Packages/DelveStore/Tools/regenerate_v1_fixture.py` (byte-reproducible; commit the result only after intentional schema migrations).
-- All gameplay content ships as data files (room graphs, puzzle tables) compiled into the app bundle — no downloads.
+- Godot 4.4.1: `godot --headless --editor --path . --quit`, then `godot --headless --path . --script res://godot/tests/test_game.gd` and `godot --headless --path . --script res://godot/tests/test_ui.gd`.
+- The Godot CI workflow also tests a packed build without the source tree. The game reads the shared content files from `Packages/DelveKit/Sources/DelveKit/Resources`; the Windows export preset includes them.
+- `toolchain.json`, `Delve.xcodeproj`, the Swift packages, and the pinned iOS CI describe the retained native app: Xcode 26.0.1 (17A400), iOS SDK 26.0, Swift 6.
+- Legacy package tests on Linux/macOS: `swift test --package-path Packages/DelveKit && swift test --package-path Packages/DelveStore`.
+- Source gates: `bash scripts/check_zero_network.sh`, `scripts/check_native_only.sh`, and `scripts/check_delvekit_purity.sh`; full native simulator validation uses `Scripts/ci.sh <sha>` on macOS.
+- Regenerate the legacy store fixture with `python3 Packages/DelveStore/Tools/regenerate_v1_fixture.py` only after intentional schema migrations.

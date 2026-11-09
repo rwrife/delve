@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Native-only framework gate.
+# Legacy native iOS framework gate.
 #
 # Fails the build if any prohibited cross-platform/hybrid framework leaves a
 # trace in the repository: Flutter, React Native, Expo, Kotlin Multiplatform,
-# .NET MAUI, Unity (see toolchain.json ui_frameworks_prohibited).
+# .NET MAUI, Unity (see toolchain.json ui_frameworks_prohibited). The
+# separate Godot game is an intentional exception to the former native-only
+# project direction.
 #
 # Checks two surfaces:
 #   1. Manifest/fingerprint files anywhere in the tree (existence alone is a
@@ -63,4 +65,4 @@ if [ "$fail" -ne 0 ]; then
   exit 1
 fi
 
-echo "Native-only gate: PASS (no Flutter/React Native/Expo/Kotlin Multiplatform/.NET MAUI/Unity traces)"
+echo "Legacy native iOS framework gate: PASS (no Flutter/React Native/Expo/Kotlin Multiplatform/.NET MAUI/Unity traces)"
